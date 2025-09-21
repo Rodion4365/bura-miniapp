@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: bura-backend
+    env: docker
+    plan: free
+    dockerfilePath: Dockerfile.backend
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ORIGIN
+        value: https://<your-gh-username>.github.io
