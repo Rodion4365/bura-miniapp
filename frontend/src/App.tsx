@@ -18,7 +18,7 @@ export default function App(){
   const [state, setState] = useState<GameState>()
   const wsRef = useRef<WebSocket | null>(null)
 
-  // ✅ Безопасная инициализация: не падаем, если verify() не пройдёт
+  // Безопасная инициализация: не падаем, если verify() не пройдёт
   useEffect(() => {
     tg?.expand?.()
     const run = async () => {
@@ -40,16 +40,22 @@ export default function App(){
         setUser({ id, name })
         setHeaders({ 'x-user-id': id, 'x-user-name': encodeURIComponent(name), 'x-user-avatar': '' })
       } finally {
-        tg?.ready?.() // ⚠️ это убирает чёрный экран Telegram
+        tg?.ready?.() // убирает тёмный экран Telegram
       }
     }
     run()
   }, [])
 
+  // Подключение к комнате по WS + загрузка состояния
   useEffect(()=>{
     if(!roomId || !user) return
+
     getState(roomId, user.id).then(setState)
-    const ws = new WebSocket((import.meta.env.VITE_WS_BASE || 'ws://localhost:8000')+`/ws/${roomId}`)
+
+    const base = import.meta.env.VITE_WS_BASE || 'ws://localhost:8000'
+    // 🔑 player_id добавлен в query-параметры
+    const ws = new WebSocket(`${base}/ws/${roomId}?player_id=${encodeURIComponent(user.id)}`)
+
     ws.onmessage = async (ev)=>{
       const msg = JSON.parse(ev.data)
       if(msg.type==='state'){
@@ -57,6 +63,8 @@ export default function App(){
         setState(s)
       }
     }
+    ws.onerror = (e) => console.error('WS error', e)
+
     wsRef.current = ws
     return ()=>{ ws.close() }
   }, [roomId, user?.id])
@@ -71,26 +79,38 @@ export default function App(){
   return (
     <div className="app">
       <h2>Бура</h2>
-      {user && <div className="row"><div className="badge">{user.name}</div>{state && <div className="badge">Комната: {state.room_id}</div>}</div>}
+      {user && (
+        <div className="row">
+          <div className="badge">{user.name}</div>
+          {state && <div className="badge">Комната: {state.room_id}</div>}
+        </div>
+      )}
+
       {!roomId && headers['x-user-id'] && (
         <div className="grid" style={{marginTop:12}}>
           <VariantSelector headers={headers} onCreated={setRoomId} />
           <Lobby headers={headers} onJoined={setRoomId} />
         </div>
       )}
+
       {roomId && state && (
         <div className="grid" style={{marginTop:12}}>
           <TableView table={state.table_cards} trump={state.trump} trumpCard={state.trump_card} />
           <div className="row">
             <div className="badge">Игроков: {state.players.length}/{state.variant.players_max}</div>
             <div className="badge">Колода: {state.deck_count}</div>
-            <div className="badge">Ход: {state.turn_player_id?.slice(0,4)}</div>
+            <div className="badge">Ход: {state.turn_player_id?.slice(0,4) || '—'}</div>
           </div>
-          <Controls onStart={async()=>{ await startGame(roomId); }} onDraw={async()=>{ wsRef.current?.send(JSON.stringify({type:'draw'})) }} />
-          {state.hands && <div>
-            <h4>Твоя рука</h4>
-            <Hand cards={state.hands} onPlay={onPlay} />
-          </div>}
+          <Controls
+            onStart={async()=>{ if(roomId) await startGame(roomId) }}
+            onDraw={async()=>{ wsRef.current?.send(JSON.stringify({type:'draw'})) }}
+          />
+          {state.hands && (
+            <div>
+              <h4>Твоя рука</h4>
+              <Hand cards={state.hands} onPlay={onPlay} />
+            </div>
+          )}
         </div>
       )}
     </div>
