@@ -18,14 +18,33 @@ export default function App(){
   const [state, setState] = useState<GameState>()
   const wsRef = useRef<WebSocket | null>(null)
 
-  useEffect(()=>{
+  // ✅ Безопасная инициализация: не падаем, если verify() не пройдёт
+  useEffect(() => {
     tg?.expand?.()
-    const initData = tg?.initData || ''
-    verify(initData).then(u=>{
-      setUser({ id: u.user_id, name: u.name, avatar: u.avatar_url })
-      setHeaders({ 'x-user-id': u.user_id, 'x-user-name': encodeURIComponent(u.name), 'x-user-avatar': u.avatar_url || '' })
-    })
-  },[])
+    const run = async () => {
+      try {
+        const initData = tg?.initData || ''
+        if (!initData) throw new Error('No initData')
+        const u = await verify(initData)
+        setUser({ id: u.user_id, name: u.name, avatar: u.avatar_url })
+        setHeaders({
+          'x-user-id': u.user_id,
+          'x-user-name': encodeURIComponent(u.name),
+          'x-user-avatar': u.avatar_url || ''
+        })
+      } catch (err) {
+        console.error('Auth failed, fallback to guest:', err)
+        const unsafe = tg?.initDataUnsafe?.user
+        const id = unsafe?.id ? String(unsafe.id) : 'guest'
+        const name = unsafe?.first_name || 'Guest'
+        setUser({ id, name })
+        setHeaders({ 'x-user-id': id, 'x-user-name': encodeURIComponent(name), 'x-user-avatar': '' })
+      } finally {
+        tg?.ready?.() // ⚠️ это убирает чёрный экран Telegram
+      }
+    }
+    run()
+  }, [])
 
   useEffect(()=>{
     if(!roomId || !user) return
