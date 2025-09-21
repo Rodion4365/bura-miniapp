@@ -1,6 +1,6 @@
 from __future__ import annotations
 import random
-from typing import Dict, List, Optional, Literal
+from typing import Dict, List, Optional
 from models import Card, GameVariant, Player, GameState
 
 SUITS = ["♠","♥","♦","♣"]
@@ -46,9 +46,9 @@ class Room:
     def remove_player(self, player_id: str):
         self.players = [p for p in self.players if p.id != player_id]
         self.hands.pop(player_id, None)
-        if self.turn_idx >= len(self.players):
-            self.turn_idx = 0
-        if len(self.players) == 0:
+        if self.players:
+            self.turn_idx %= len(self.players)
+        else:
             self.started = False
 
     def start(self):
@@ -119,10 +119,10 @@ class Room:
                 self.hands[pl.id].append(self.deck.pop(0))
 
 ROOMS: Dict[str, Room] = {}
+
 def list_variants(): return list(VARIANTS.values())
 
 def list_rooms_summary():
-    """Сводка для лобби."""
     res = []
     for r in ROOMS.values():
         res.append({

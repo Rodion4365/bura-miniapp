@@ -74,8 +74,8 @@ class Hub:
     def __init__(self):
         self.rooms: Dict[str, List[WebSocket]] = {}
         self.lobby: List[WebSocket] = []
-        self.ws_player: Dict[WebSocket, str] = {}  # websok -> player_id
-        self.ws_room: Dict[WebSocket, str] = {}    # websok -> room_id
+        self.ws_player: Dict[WebSocket, str] = {}
+        self.ws_room: Dict[WebSocket, str] = {}
 
     async def connect_room(self, room_id: str, player_id: str, ws: WebSocket):
         await ws.accept()
@@ -89,11 +89,9 @@ class Hub:
         if rid and ws in self.rooms.get(rid, []):
             self.rooms[rid].remove(ws)
         if rid and pid and rid in ROOMS:
-            # удаляем игрока из комнаты
             ROOMS[rid].remove_player(pid)
-            # если пустая — вычищаем комнату
             if len(ROOMS[rid].players) == 0:
-                ROOMS.pop(rid, None)
+                ROOMS.pop(rid, None)  # авто-удаление пустой комнаты
             await broadcast_room_safe(rid)
             await broadcast_lobby()
 
@@ -134,12 +132,10 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
             data = await ws.receive_json()
             t = data.get("type")
             if t == "play":
-                pid = data["player_id"]
-                ROOMS[room_id].play(pid, data["card"])
+                ROOMS[room_id].play(data["player_id"], data["card"])
                 await broadcast_room(room_id)
             elif t == "cover":
-                pid = data["player_id"]
-                ROOMS[room_id].cover(pid, data["card"])
+                ROOMS[room_id].cover(data["player_id"], data["card"])
                 await broadcast_room(room_id)
             elif t == "draw":
                 ROOMS[room_id].draw_up()
@@ -153,7 +149,7 @@ async def ws_lobby(ws: WebSocket):
     try:
         await ws.send_json({"type":"rooms","payload": list_rooms_summary()})
         while True:
-            await ws.receive_text()  # держим соединение
+            await ws.receive_text()
     except WebSocketDisconnect:
         if ws in hub.lobby:
             hub.lobby.remove(ws)

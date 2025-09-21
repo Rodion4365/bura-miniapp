@@ -10,3 +10,10 @@ body { margin: 0; }
 .button { padding: 8px 12px; border: none; border-radius: 10px; background: black; color: white; cursor: pointer; }
 .button.secondary { background: #444; }
 .grid { display: grid; gap: 12px; }
+
+/* BURA TABS START */
+.tabs{display:flex;gap:8px;margin-top:8px}
+.tab{padding:8px 12px;border-radius:999px;border:1px solid #ddd;background:#fff;font-weight:600;cursor:pointer;transition:all .15s ease}
+.tab.active{background:#111;color:#fff;border-color:#111}
+.tab:active{transform:translateY(1px)}
+/* BURA TABS END */
