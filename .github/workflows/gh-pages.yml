@@ -1,6 +1,8 @@
 name: Deploy Frontend to GitHub Pages
+
 on:
-  push: { branches: [ main ] }
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -15,22 +17,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
         working-directory: frontend
+        run: npm install --no-fund --no-audit
+
       - name: Build
         working-directory: frontend
         env:
           VITE_API_BASE: ${{ vars.PUBLIC_API_BASE }}
-          VITE_WS_BASE: ${{ vars.PUBLIC_WS_BASE }}
-          VITE_BASE: ${{ vars.PUBLIC_BASE_PATH }}
+          VITE_WS_BASE:  ${{ vars.PUBLIC_WS_BASE }}
+          VITE_BASE:     ${{ vars.PUBLIC_BASE_PATH }}
         run: |
           npm run build
+          # 404 для Pages с SPA
           cp dist/index.html dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist
+
   deploy:
     environment:
       name: github-pages
