@@ -1,6 +1,6 @@
 from __future__ import annotations
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal
 from models import Card, GameVariant, Player, GameState
 
 SUITS = ["♠","♥","♦","♣"]
@@ -33,14 +33,29 @@ class Room:
         self.winner_id: Optional[str] = None
 
     def add_player(self, p: Player):
-        if self.started: raise ValueError("Game already started")
-        if len(self.players) >= self.variant.players_max: raise ValueError("Room full")
+        if self.started:
+            raise ValueError("Game already started")
+        if any(x.id == p.id for x in self.players):
+            return
+        if len(self.players) >= self.variant.players_max:
+            raise ValueError("Room full")
         p.seat = len(self.players)
         self.players.append(p)
+        self.hands.setdefault(p.id, [])
+
+    def remove_player(self, player_id: str):
+        self.players = [p for p in self.players if p.id != player_id]
+        self.hands.pop(player_id, None)
+        if self.turn_idx >= len(self.players):
+            self.turn_idx = 0
+        if len(self.players) == 0:
+            self.started = False
 
     def start(self):
-        if self.started: return
-        if len(self.players) < self.variant.players_min: raise ValueError("Not enough players")
+        if self.started:
+            return
+        if len(self.players) < self.variant.players_min:
+            raise ValueError("Not enough players")
         self.deck = [Card(suit=s, rank=r) for s in SUITS for r in RANKS]
         random.shuffle(self.deck)
         self.trump_card = self.deck[-1]
@@ -53,6 +68,7 @@ class Room:
                     self.hands[pl.id].append(self.deck.pop(0))
         self.started = True
         self.turn_idx = 0
+        self.table.clear()
 
     def to_state(self, me_id: Optional[str]) -> GameState:
         return GameState(
@@ -60,22 +76,23 @@ class Room:
             players=self.players, me=next((p for p in self.players if p.id == me_id), None),
             trump=self.trump, trump_card=self.trump_card, table_cards=list(self.table),
             deck_count=len(self.deck), hands=self.hands.get(me_id),
-            turn_player_id=self.players[self.turn_idx].id if self.started else None,
+            turn_player_id=self.players[self.turn_idx].id if self.started and self.players else None,
             winner_id=self.winner_id,
         )
 
-    def current_player_id(self) -> str:
+    def current_player_id(self) -> Optional[str]:
+        if not self.players:
+            return None
         return self.players[self.turn_idx].id
 
     def _beats(self, a: Card, b: Card) -> bool:
-        # той же мастью старше, или козырем если b не козырь
         if a.suit == b.suit and a.rank > b.rank: return True
         if a.suit == self.trump and b.suit != self.trump: return True
         return False
 
     def play(self, pid: str, card: Card):
         if pid != self.current_player_id(): raise ValueError("Not your turn")
-        hand = self.hands[pid]
+        hand = self.hands.get(pid, [])
         for i,c in enumerate(hand):
             if c.suit == card.suit and c.rank == card.rank:
                 self.table.append(hand.pop(i))
@@ -88,7 +105,7 @@ class Room:
         if not self.table: raise ValueError("Nothing to cover")
         last = self.table[-1]
         if not self._beats(card, last): raise ValueError("Card does not cover")
-        hand = self.hands[pid]
+        hand = self.hands.get(pid, [])
         for i,c in enumerate(hand):
             if c.suit == card.suit and c.rank == card.rank:
                 self.table.append(hand.pop(i))
@@ -102,4 +119,18 @@ class Room:
                 self.hands[pl.id].append(self.deck.pop(0))
 
 ROOMS: Dict[str, Room] = {}
-def list_variants() -> List[GameVariant]: return list(VARIANTS.values())
+def list_variants(): return list(VARIANTS.values())
+
+def list_rooms_summary():
+    """Сводка для лобби."""
+    res = []
+    for r in ROOMS.values():
+        res.append({
+            "room_id": r.id,
+            "name": r.name,
+            "variant": r.variant.model_dump(),
+            "players": len(r.players),
+            "players_max": r.variant.players_max,
+            "started": r.started,
+        })
+    return res
