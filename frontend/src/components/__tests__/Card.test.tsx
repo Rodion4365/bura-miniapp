@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react'
-import CardView from '../Card'
+import { expect, test } from 'vitest'
+import CardView from '../CardView'
 
 test('renders face values and suits', () => {
   render(<CardView card={{ suit: '♠', rank: 14 }} />)
-  expect(screen.getByTitle('A♠')).toBeInTheDocument()
+  expect(screen.getByTitle('Т♠')).toBeInTheDocument()
 })
 
 test('renders number ranks', () => {

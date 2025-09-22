@@ -33,3 +33,28 @@ def test_create_join_start_flow():
     assert st["started"] is True
     assert isinstance(st.get("hands"), list)
     assert st["variant"]["players_max"] == 2
+    assert st["scores"]["userA"] == 0
+    assert st["scores"]["userB"] == 0
+
+
+def test_create_with_custom_config():
+    headers = {"x-user-id":"host","x-user-name":"Host","x-user-avatar":""}
+    payload = {
+        "room_name": "Custom",
+        "config": {
+            "maxPlayers": 4,
+            "discardVisibility": "faceDown",
+            "enableFourEnds": True,
+            "turnTimeoutSec": 60,
+        },
+    }
+    r = client.post("/api/game/create", json=payload, headers=headers)
+    assert r.status_code == 200
+    room_id = r.json()["room_id"]
+
+    state = client.get(f"/api/game/state/{room_id}", headers=headers)
+    assert state.status_code == 200
+    data = state.json()
+    assert data["config"]["maxPlayers"] == 4
+    assert data["config"]["discardVisibility"] == "faceDown"
+    assert data["variant"]["key"] == "custom"

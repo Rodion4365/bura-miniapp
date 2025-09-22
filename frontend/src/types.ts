@@ -24,4 +24,5 @@ export type GameState = {
   hands?: Card[]
   turn_player_id?: string
   winner_id?: string
+  scores?: Record<string, number>
 }

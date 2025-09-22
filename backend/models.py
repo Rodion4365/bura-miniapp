@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import List, Literal, Optional
-from pydantic import BaseModel
+from typing import Dict, List, Literal, Optional
+from pydantic import BaseModel, Field, ConfigDict
 
 Suit = Literal["♠","♥","♦","♣"]
 
@@ -15,15 +15,27 @@ class Player(BaseModel):
     seat: Optional[int] = None
 
 class GameVariant(BaseModel):
-    key: Literal["classic_3p","classic_2p","with_sevens","with_draw"]
+    key: Literal["classic_3p","classic_2p","with_sevens","with_draw", "custom"]
     title: str
     players_min: int
     players_max: int
     description: str
 
+
+class TableConfig(BaseModel):
+    max_players: Literal[2, 3, 4] = Field(3, alias="maxPlayers")
+    discard_visibility: Literal["open", "faceDown"] = Field("open", alias="discardVisibility")
+    enable_four_ends: bool = Field(True, alias="enableFourEnds")
+    turn_timeout_sec: Literal[30, 40, 50, 60] = Field(40, alias="turnTimeoutSec")
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
 class CreateGameRequest(BaseModel):
-    variant_key: GameVariant.__annotations__["key"]
     room_name: str
+    variant_key: Optional[GameVariant.__annotations__["key"]] = None
+    config: Optional[TableConfig] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 class JoinGameRequest(BaseModel):
     room_id: str
@@ -37,6 +49,7 @@ class GameState(BaseModel):
     room_name: str
     started: bool
     variant: GameVariant
+    config: Optional[TableConfig] = None
     players: List[Player]
     me: Optional[Player]
     trump: Optional[Suit]
@@ -46,3 +59,6 @@ class GameState(BaseModel):
     hands: Optional[List[Card]] = None
     turn_player_id: Optional[str] = None
     winner_id: Optional[str] = None
+    scores: Dict[str, int] = Field(default_factory=dict)
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
