@@ -1,73 +1,36 @@
 import React from 'react'
 import type { Card } from '../types'
+import CardView from './CardView'
 
-function suitIcon(s: string){
-  // простые иконки мастей (можно заменить на SVG)
-  if (s === '♠') return '♠'
-  if (s === '♥') return '♥'
-  if (s === '♦') return '♦'
-  if (s === '♣') return '♣'
-  return s
-}
-
-function rankText(r: number){
-  if (r === 11) return 'J'
-  if (r === 12) return 'Q'
-  if (r === 13) return 'K'
-  if (r === 14) return 'A'
-  return String(r)
-}
+type Pair = { a: Card; c?: Card }
 
 export default function TableView({
   table,
   trump,
   trumpCard,
-  opponents = 1,
 }:{
-  table: Card[] | undefined
-  trump: string | undefined
-  trumpCard: Card | undefined
-  opponents?: number
-}){
+  table?: Pair[]
+  trump?: string
+  trumpCard?: Card
+}) {
+  const suitToEmoji: Record<string, string> = { S:'♠️', H:'♥️', D:'♦️', C:'♣️', s:'♠️', h:'♥️', d:'♦️', c:'♣️' }
+  const trumpEmoji = trump ? (suitToEmoji[trump] ?? trump) : ''
+
   return (
-    <div className="board">
-      {/* ВЕРХНЯЯ РАССТАНОВКА (оппоненты, рубашки) */}
-      <div className="opponents">
-        {Array.from({length: opponents}).map((_,i)=>(
-          <div key={i} className="opponent-slot">
-            <div className="card-back"></div>
-            <div className="card-back"></div>
-            <div className="card-back"></div>
+    <div className="table-area">
+      <div id="drop-zone" className="drop-zone" />
+      <div className="pairs">
+        {(table || []).map((p, idx)=>(
+          <div className="pair" key={idx}>
+            <CardView card={p.a} />
+            {p.c ? <CardView card={p.c} /> : <div className="cover-slot" />}
           </div>
         ))}
       </div>
 
-      {/* СТОЛ */}
-      <div className="table-center">
-        <div className="table-cards">
-          {(table || []).map((c, idx)=>(
-            <div key={idx} className="card on-table">
-              <div className="rank">{rankText(c.rank)}</div>
-              <div className={`suit ${['♥','♦'].includes(c.suit) ? 'red' : ''}`}>{suitIcon(c.suit)}</div>
-            </div>
-          ))}
-          {(table?.length ?? 0) === 0 && (
-            <div className="badge">Ходите!</div>
-          )}
-        </div>
-
-        {/* КОЗЫРЬ — фиксированная большая иконка */}
-        <div className="trump">
-          <div className="trump-title">Козырь</div>
-          {trumpCard ? (
-            <div className="card trump-card">
-              <div className="rank">{rankText(trumpCard.rank)}</div>
-              <div className={`suit ${['♥','♦'].includes(trumpCard.suit) ? 'red' : ''}`}>{suitIcon(trumpCard.suit)}</div>
-            </div>
-          ) : (
-            <div className="card trump-card ghost">?</div>
-          )}
-        </div>
+      <div className="trump-panel">
+        <div className="trump-title">Козырь {trumpEmoji}</div>
+        {trumpCard && <CardView card={trumpCard} />}
       </div>
     </div>
   )

@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const base =
+  process.env.PUBLIC_BASE_PATH && process.env.PUBLIC_BASE_PATH !== 'PUBLIC_BASE_PATH'
+    ? process.env.PUBLIC_BASE_PATH
+    : '/'
+
 export default defineConfig({
-  base: process.env.VITE_BASE || '/',
   plugins: [react()],
-  server: { port: 5173 },
-  test: { environment: 'jsdom', setupFiles: 'src/test.setup.ts' }
+  base,
 })

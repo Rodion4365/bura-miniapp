@@ -139,3 +139,54 @@ body, .app{
 .badge.strong{ color: var(--fg); font-weight: 700; }
 
 /* (Существующие стили стола/карт остаются; темы применятся за счёт переменных) */
+
+/* ===== Cards ===== */
+.card{
+  width: 68px; height: 96px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.card-rank{ font-weight: 800; font-size: 18px; line-height: 1; }
+.card-suit{ font-size: 18px; opacity: .9; }
+
+/* ===== Table ===== */
+.table-area{ position: relative; display:grid; gap:12px; }
+.pairs{ display:flex; flex-wrap: wrap; gap:12px; min-height: 112px; }
+.pair{ display:flex; gap:12px; align-items:center; }
+.cover-slot{ width:68px; height:96px; border:1px dashed var(--border); border-radius:10px; opacity:.5; }
+
+.trump-panel{
+  display:flex; align-items:center; gap:10px;
+  border:1px solid var(--border); background: var(--card); border-radius: 14px; padding: 8px 10px;
+  width: fit-content;
+}
+.trump-title{ font-weight: 700; }
+
+/* зона, куда «роняем» карту */
+.drop-zone{
+  position:absolute; inset: 0;
+  border-radius: 16px;
+  outline: 2px dashed transparent;
+  pointer-events: none;
+}
+.drop-zone.drop-active{
+  outline-color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+/* ===== Hand ===== */
+.hand{ display:flex; gap:8px; flex-wrap: wrap; }
+.hand.deal-anim .hand-card{
+  animation: deal .35s ease both;
+}
+.hand-card{ cursor: pointer; }
+.hand-card:active .card{ transform: translateY(-2px) scale(1.02); box-shadow: 0 6px 16px rgba(0,0,0,.15); }
+
+@keyframes deal{
+  from{ transform: translateY(8px); opacity: .0; }
+  to  { transform: none; opacity: 1; }
+}
