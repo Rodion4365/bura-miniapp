@@ -60,16 +60,38 @@ export default function App(){
     getState(roomId, user.id).then(s => {
       setState(s)
       setScreen('room')
+    }).catch(err => {
+      console.error('Failed to load game state', err)
     })
 
     const base = import.meta.env.VITE_WS_BASE || (location.origin.replace(/^http/,'ws'))
     const ws = new WebSocket(`${base}/ws/${roomId}?player_id=${encodeURIComponent(user.id)}`)
 
     ws.onmessage = async (ev)=>{
-      const msg = JSON.parse(ev.data)
-      if(msg.type==='state'){
-        const s = await getState(roomId, user.id)
-        setState(s)
+      try {
+        const msg = JSON.parse(ev.data)
+        if(msg?.type === 'state' && msg?.payload){
+          const payload = msg.payload as GameState
+          setScreen('room')
+          setState(prev => {
+            if(!prev) return payload as GameState
+            const merged: GameState = {
+              ...prev,
+              ...payload,
+              me: payload.me ?? prev.me,
+              hands: payload.hands ?? prev.hands,
+            }
+            return merged
+          })
+          try {
+            const s = await getState(roomId, user.id)
+            setState(s)
+          } catch (err) {
+            console.error('Failed to refresh state after WS update', err)
+          }
+        }
+      } catch (err) {
+        console.error('WS message parse error', err)
       }
     }
     ws.onerror = (e)=>console.error('WS error', e)
