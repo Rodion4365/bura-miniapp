@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './styles.css'
 import MainMenu from './components/MainMenu'
-import VariantSelector from './components/VariantSelector'
+import CreateTableForm from './components/CreateTableForm'
 import Lobby from './components/Lobby'
 import Controls from './components/Controls'
 import TableView from './components/Table'
@@ -10,10 +10,11 @@ import { getState, verify } from './api'
 import type { GameState, Card } from './types'
 import { applyThemeOnce, watchTelegramTheme } from './theme'
 import { createRoomChannel, type RoomChannel } from './room-channel'
+import GameRules from './components/GameRules'
 
 declare global { interface Window { Telegram: any } }
 
-type Screen = 'menu' | 'create' | 'join' | 'room'
+type Screen = 'menu' | 'create' | 'join' | 'room' | 'rules'
 
 export default function App(){
   const tg = window.Telegram?.WebApp
@@ -112,13 +113,14 @@ export default function App(){
         <MainMenu
           onNewGame={()=> setScreen('create')}
           onJoin={()=> setScreen('join')}
+          onShowRules={()=> setScreen('rules')}
         />
       )}
 
       {screen === 'create' && (
         <div className="page-wrap">
           <h2 className="page-title">Новая игра</h2>
-          <VariantSelector headers={headers} onCreated={(id)=> setRoomId(id)} />
+          <CreateTableForm headers={headers} onCreated={(id)=> setRoomId(id)} />
           <button className="link-btn" onClick={()=> setScreen('menu')}>← Назад</button>
         </div>
       )}
@@ -131,17 +133,33 @@ export default function App(){
         </div>
       )}
 
+      {screen === 'rules' && (
+        <div className="page-wrap">
+          <h2 className="page-title">Правила</h2>
+          <GameRules />
+          <button className="link-btn" onClick={()=> setScreen('menu')}>← Назад</button>
+        </div>
+      )}
+
       {screen === 'room' && state && (
         <div className="page-wrap">
           <div className="room-top">
             <div className="badge strong">{user?.name}</div>
             <div className="badge">Комната: {state.room_id}</div>
-            <div className="badge">Игроков: {state.players.length}/{state.variant.players_max}</div>
+            <div className="badge">
+              Игроков: {state.players.length}/
+              {state.config?.maxPlayers ?? state.variant?.players_max ?? state.players.length}
+            </div>
             <div className="badge">Колода: {state.deck_count}</div>
             <div className="badge">Ход: {state.turn_player_id?.slice(0,4) || '—'}</div>
+            {state.config && (
+              <div className="badge">
+                Таймер: {state.config.turnTimeoutSec} с · {state.config.discardVisibility === 'open' ? 'открытый сброс' : 'закрытый сброс'}
+              </div>
+            )}
           </div>
 
-          <TableView table={state.table_cards} trump={state.trump} trumpCard={state.trump_card} opponents={1} />
+          <TableView table={state.table_cards} trump={state.trump} trumpCard={state.trump_card} />
 
           <Controls state={state} onDraw={onDraw} />
 
