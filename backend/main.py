@@ -134,10 +134,15 @@ class Hub:
         await ws.accept()
         self.lobby.append(ws)
 
-    async def send_room(self, room_id: str, message: dict):
+    async def send_room_state(self, room_id: str):
+        room = ROOMS.get(room_id)
+        if not room:
+            return
         for ws in list(self.rooms.get(room_id, [])):
+            player_id = self.ws_player.get(ws)
             try:
-                await ws.send_json(message)
+                payload = room.to_state(player_id).model_dump()
+                await ws.send_json({"type": "state", "payload": payload})
             except RuntimeError:
                 pass
 
@@ -152,11 +157,7 @@ hub = Hub()
 
 # ---------- broadcasters ----------
 async def broadcast_room(room_id: str):
-    if room_id in ROOMS:
-        r = ROOMS[room_id]
-        await hub.send_room(
-            room_id, {"type": "state", "payload": r.to_state(None).model_dump()}
-        )
+    await hub.send_room_state(room_id)
 
 async def broadcast_room_safe(room_id: Optional[str]):
     if room_id and room_id in ROOMS:
