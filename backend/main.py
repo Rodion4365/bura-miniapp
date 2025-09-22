@@ -1,30 +1,48 @@
 from __future__ import annotations
+
+import os
+import json
+import uuid
+from typing import Dict, List, Optional
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import os, json, uuid
-from typing import Dict, List, Optional
+
 from models import CreateGameRequest, JoinGameRequest, Player
 from game import ROOMS, Room, list_variants, VARIANTS, list_rooms_summary
 from auth import verify_init_data
 
-ORIGIN = os.getenv("ORIGIN", "http://localhost:5173")
+# ---------- CORS with multiple origins ----------
+def _parse_origins(raw: str) -> list[str]:
+    """
+    Разбивает ORIGIN из env по запятым, убирает пробелы и пустые.
+    Пример: "https://buragame.ru, https://www.buragame.ru"
+    """
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+ORIGIN_ENV = os.getenv("ORIGIN", "")
+ALLOWED_ORIGINS = ["http://localhost:5173"] + _parse_origins(ORIGIN_ENV)
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[ORIGIN, "http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
 )
 
+print("[CORS] allow_origins:", ALLOWED_ORIGINS)
+
+# ---------- API models ----------
 class VerifyResult(BaseModel):
     ok: bool
     user_id: str
     name: str
     avatar_url: Optional[str] = None
 
+# ---------- REST ----------
 @app.get("/api/variants")
 async def variants():
     return [v.model_dump() for v in list_variants()]
@@ -36,11 +54,21 @@ async def rooms():
 @app.post("/api/auth/verify")
 async def auth_verify(init_data: str):
     data = verify_init_data(init_data)
-    user = json.loads(data.get("user","{}"))
-    return VerifyResult(ok=True, user_id=str(user.get("id")), name=user.get("first_name","Player"), avatar_url=user.get("photo_url"))
+    user = json.loads(data.get("user", "{}"))
+    return VerifyResult(
+        ok=True,
+        user_id=str(user.get("id")),
+        name=user.get("first_name", "Player"),
+        avatar_url=user.get("photo_url"),
+    )
 
 @app.post("/api/game/create")
-async def create_game(req: CreateGameRequest, x_user_id: str = Header(...), x_user_name: str = Header("Player"), x_user_avatar: str = Header("")):
+async def create_game(
+    req: CreateGameRequest,
+    x_user_id: str = Header(...),
+    x_user_name: str = Header("Player"),
+    x_user_avatar: str = Header(""),
+):
     variant = VARIANTS[req.variant_key]
     room_id = str(uuid.uuid4())[:8]
     r = Room(room_id, req.room_name, variant)
@@ -50,9 +78,15 @@ async def create_game(req: CreateGameRequest, x_user_id: str = Header(...), x_us
     return {"room_id": room_id}
 
 @app.post("/api/game/join")
-async def join_game(req: JoinGameRequest, x_user_id: str = Header(...), x_user_name: str = Header("Player"), x_user_avatar: str = Header("")):
+async def join_game(
+    req: JoinGameRequest,
+    x_user_id: str = Header(...),
+    x_user_name: str = Header("Player"),
+    x_user_avatar: str = Header(""),
+):
     r = ROOMS.get(req.room_id)
-    if not r: return {"error":"room_not_found"}
+    if not r:
+        return {"error": "room_not_found"}
     r.add_player(Player(id=x_user_id, name=x_user_name, avatar_url=x_user_avatar))
     await broadcast_room(req.room_id)
     await broadcast_lobby()
@@ -69,7 +103,7 @@ async def game_state(room_id: str, x_user_id: Optional[str] = Header(None)):
     r = ROOMS[room_id]
     return r.to_state(x_user_id).model_dump()
 
-# ---------- websockets ----------
+# ---------- WebSockets hub ----------
 class Hub:
     def __init__(self):
         self.rooms: Dict[str, List[WebSocket]] = {}
@@ -91,7 +125,8 @@ class Hub:
         if rid and pid and rid in ROOMS:
             ROOMS[rid].remove_player(pid)
             if len(ROOMS[rid].players) == 0:
-                ROOMS.pop(rid, None)  # авто-удаление пустой комнаты
+                # авто-удаление пустой комнаты
+                ROOMS.pop(rid, None)
             await broadcast_room_safe(rid)
             await broadcast_lobby()
 
@@ -101,28 +136,36 @@ class Hub:
 
     async def send_room(self, room_id: str, message: dict):
         for ws in list(self.rooms.get(room_id, [])):
-            try: await ws.send_json(message)
-            except RuntimeError: pass
+            try:
+                await ws.send_json(message)
+            except RuntimeError:
+                pass
 
     async def send_lobby(self, message: dict):
         for ws in list(self.lobby):
-            try: await ws.send_json(message)
-            except RuntimeError: pass
+            try:
+                await ws.send_json(message)
+            except RuntimeError:
+                pass
 
 hub = Hub()
 
+# ---------- broadcasters ----------
 async def broadcast_room(room_id: str):
     if room_id in ROOMS:
         r = ROOMS[room_id]
-        await hub.send_room(room_id, {"type":"state","payload": r.to_state(None).model_dump()})
+        await hub.send_room(
+            room_id, {"type": "state", "payload": r.to_state(None).model_dump()}
+        )
 
 async def broadcast_room_safe(room_id: Optional[str]):
     if room_id and room_id in ROOMS:
         await broadcast_room(room_id)
 
 async def broadcast_lobby():
-    await hub.send_lobby({"type":"rooms","payload": list_rooms_summary()})
+    await hub.send_lobby({"type": "rooms", "payload": list_rooms_summary()})
 
+# ---------- WS endpoints ----------
 @app.websocket("/ws/{room_id}")
 async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
     await hub.connect_room(room_id, player_id, ws)
@@ -147,7 +190,7 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
 async def ws_lobby(ws: WebSocket):
     await hub.connect_lobby(ws)
     try:
-        await ws.send_json({"type":"rooms","payload": list_rooms_summary()})
+        await ws.send_json({"type": "rooms", "payload": list_rooms_summary()})
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
