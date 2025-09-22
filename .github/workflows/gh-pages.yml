@@ -5,7 +5,6 @@ on:
     branches:
       - main
 
-# ВАЖНО: разрешаем боту писать коммиты/ветки
 permissions:
   contents: write
 
@@ -29,12 +28,18 @@ jobs:
 
       - name: Build
         env:
-          PUBLIC_BASE_PATH: /bura-miniapp/
-        run: npm run build
+          # прокидываем repo variables в Vite
+          VITE_API_BASE: ${{ vars.PUBLIC_API_BASE }}
+          VITE_WS_BASE:  ${{ vars.PUBLIC_WS_BASE }}
+          # базовый путь для GitHub Pages (например `/bura-miniapp/`)
+          BASE: ${{ vars.PUBLIC_BASE_PATH }}
+        run: |
+          # если используешь Vite, выставим base через CLI env
+          echo "VITE_APP_BASE=${BASE}"
+          npm run build -- --base "${BASE:-/}"
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: frontend/dist
-          # publish_branch: gh-pages   # (необязательно, по умолчанию gh-pages)
