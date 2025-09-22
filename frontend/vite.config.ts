@@ -9,4 +9,8 @@ const base =
 export default defineConfig({
   plugins: [react()],
   base,
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test.setup.ts',
+  },
 })

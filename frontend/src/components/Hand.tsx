@@ -72,6 +72,7 @@ export default function Hand({
         <div
           key={`${c.suit}${c.rank}-${i}`}
           className="hand-card"
+          style={{ animationDelay: `${i * 60}ms` }}
           onPointerDown={(e)=>attachDrag(e, c)}
           onClick={()=>onPlay(c)}
         >

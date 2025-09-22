@@ -9,7 +9,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from models import CreateGameRequest, JoinGameRequest, Player
+from models import CreateGameRequest, JoinGameRequest, Player, GameVariant, TableConfig
 from game import ROOMS, Room, list_variants, VARIANTS, list_rooms_summary
 from auth import verify_init_data
 
@@ -69,9 +69,18 @@ async def create_game(
     x_user_name: str = Header("Player"),
     x_user_avatar: str = Header(""),
 ):
-    variant = VARIANTS[req.variant_key]
+    config = req.config or TableConfig()
+    variant = VARIANTS.get(req.variant_key) if req.variant_key else None
+    if variant is None:
+        variant = GameVariant(
+            key="custom",
+            title="Пользовательский стол",
+            players_min=2,
+            players_max=config.max_players,
+            description="Игра с настраиваемыми параметрами",
+        )
     room_id = str(uuid.uuid4())[:8]
-    r = Room(room_id, req.room_name, variant)
+    r = Room(room_id, req.room_name, variant, config)
     ROOMS[room_id] = r
     r.add_player(Player(id=x_user_id, name=x_user_name, avatar_url=x_user_avatar))
     await broadcast_lobby()
@@ -101,7 +110,7 @@ async def start_game(room_id: str):
 @app.get("/api/game/state/{room_id}")
 async def game_state(room_id: str, x_user_id: Optional[str] = Header(None)):
     r = ROOMS[room_id]
-    return r.to_state(x_user_id).model_dump()
+    return r.to_state(x_user_id).model_dump(by_alias=True)
 
 # ---------- WebSockets hub ----------
 class Hub:
@@ -141,7 +150,7 @@ class Hub:
         for ws in list(self.rooms.get(room_id, [])):
             player_id = self.ws_player.get(ws)
             try:
-                payload = room.to_state(player_id).model_dump()
+                payload = room.to_state(player_id).model_dump(by_alias=True)
                 await ws.send_json({"type": "state", "payload": payload})
             except RuntimeError:
                 pass
@@ -183,6 +192,12 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                 await broadcast_room(room_id)
             elif t == "draw":
                 ROOMS[room_id].draw_up()
+                await broadcast_room(room_id)
+            elif t == "discard":
+                ROOMS[room_id].discard(data.get("player_id"))
+                await broadcast_room(room_id)
+            elif t == "pass":
+                ROOMS[room_id].pass_turn(data.get("player_id"))
                 await broadcast_room(room_id)
     except WebSocketDisconnect:
         await hub.disconnect(ws)

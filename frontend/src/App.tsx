@@ -106,6 +106,16 @@ export default function App(){
     sendAction({ type: 'draw', player_id: user.id })
   }
 
+  function onPass(){
+    if(!user || !roomId) return
+    sendAction({ type: 'pass', player_id: user.id })
+  }
+
+  function onDiscard(){
+    if(!user || !roomId) return
+    sendAction({ type: 'discard', player_id: user.id })
+  }
+
   // рендер
   return (
     <div className="app">
@@ -142,30 +152,31 @@ export default function App(){
       )}
 
       {screen === 'room' && state && (
-        <div className="page-wrap">
-          <div className="room-top">
-            <div className="badge strong">{user?.name}</div>
-            <div className="badge">Комната: {state.room_id}</div>
-            <div className="badge">
-              Игроков: {state.players.length}/
-              {state.config?.maxPlayers ?? state.variant?.players_max ?? state.players.length}
+        <div className="game-page">
+          <header className="game-hud">
+            <div className="hud-primary">
+              <div className="hud-title">{state.room_name}</div>
+              <div className="hud-sub">Комната #{state.room_id}</div>
             </div>
-            <div className="badge">Колода: {state.deck_count}</div>
-            <div className="badge">Ход: {state.turn_player_id?.slice(0,4) || '—'}</div>
-            {state.config && (
-              <div className="badge">
-                Таймер: {state.config.turnTimeoutSec} с · {state.config.discardVisibility === 'open' ? 'открытый сброс' : 'закрытый сброс'}
-              </div>
-            )}
-          </div>
+            <div className="hud-stats">
+              <span className="pill">Игроков {state.players.length}/{state.config?.maxPlayers ?? state.variant?.players_max ?? state.players.length}</span>
+              <span className="pill">Колода {state.deck_count}</span>
+              <span className="pill">Ход: {state.turn_player_id?.slice(0, 4) || '—'}</span>
+              {state.config && (
+                <span className="pill">
+                  Таймер {state.config.turnTimeoutSec} с · {state.config.discardVisibility === 'open' ? 'открытый' : 'закрытый'} сброс
+                </span>
+              )}
+            </div>
+          </header>
 
-          <TableView table={state.table_cards} trump={state.trump} trumpCard={state.trump_card} />
+          <TableView state={state} meId={user?.id} />
 
-          <Controls state={state} onDraw={onDraw} />
+          <Controls state={state} onDraw={onDraw} onPass={onPass} onDiscard={onDiscard} />
 
           {state.hands && (
-            <div>
-              <h4>Твоя рука</h4>
+            <div className="hand-wrap">
+              <h4 className="hand-title">Твои карты</h4>
               <Hand cards={state.hands} onPlay={onPlay} />
             </div>
           )}
