@@ -7,13 +7,24 @@ import { getState } from './api'
 
 type Listener = (state: any) => void
 
+export type RoomChannel = {
+  /** Завершить работу канала и закрыть WebSocket */
+  close(): void
+  /**
+   * Отправить сообщение на сервер. Возвращает true, если удалось отправить
+   * (WebSocket в состоянии OPEN). В противном случае – false, чтобы вызывающий
+   * код мог сделать фолбэк.
+   */
+  send(message: unknown): boolean
+}
+
 export function createRoomChannel(opts: {
   wsBase: string,
   roomId: string,
   playerId: string,
   onState: Listener,
   pollIntervalMs?: number
-}) {
+}): RoomChannel {
   const { wsBase, roomId, playerId, onState } = opts
   const pollInterval = opts.pollIntervalMs ?? 3000
 
@@ -69,6 +80,17 @@ export function createRoomChannel(opts: {
   connect()
   getState(roomId, playerId).then(onState).catch(()=>{})
 
+  function trySend(message: unknown): boolean {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false
+    try {
+      if (typeof message === 'string') ws.send(message)
+      else ws.send(JSON.stringify(message))
+      return true
+    } catch (_) {
+      return false
+    }
+  }
+
   return {
     close() {
       closed = true
@@ -76,6 +98,11 @@ export function createRoomChannel(opts: {
       stopPing()
       try { ws?.close?.() } catch (_) {}
       ws = null
-    }
+    },
+    send(message: unknown) {
+      const ok = trySend(message)
+      if (!ok) startPolling()
+      return ok
+    },
   }
 }

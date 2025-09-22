@@ -59,3 +59,12 @@ export async function getState(room_id: string, x_user_id?: string): Promise<any
   if (!res.ok) throw new Error('Failed to load game state')
   return await res.json()
 }
+
+/** Старт игры */
+export async function startGame(room_id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/game/start/${room_id}`, { method: 'POST' })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || 'Failed to start game')
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './styles.css'
 import MainMenu from './components/MainMenu'
 import VariantSelector from './components/VariantSelector'
@@ -9,6 +9,7 @@ import Hand from './components/Hand'
 import { getState, verify } from './api'
 import type { GameState, Card } from './types'
 import { applyThemeOnce, watchTelegramTheme } from './theme'
+import { createRoomChannel, type RoomChannel } from './room-channel'
 
 declare global { interface Window { Telegram: any } }
 
@@ -21,7 +22,7 @@ export default function App(){
   const [roomId, setRoomId] = useState<string>()
   const [state, setState] = useState<GameState>()
   const [screen, setScreen] = useState<Screen>('menu')
-  const wsRef = useRef<WebSocket | null>(null)
+  const channelRef = useRef<RoomChannel | null>(null)
 
   // Тема
   useEffect(() => {
@@ -53,35 +54,55 @@ export default function App(){
     run()
   }, [])
 
-  // Подключение к комнате по WS + загрузка состояния
+  // Подключение к комнате (WS + fallback-поллинг)
   useEffect(()=>{
-    if(!roomId || !user) return
-
-    getState(roomId, user.id).then(s => {
-      setState(s)
-      setScreen('room')
-    })
+    // закрываем предыдущий канал, если меняется комната/пользователь
+    if (channelRef.current) {
+      channelRef.current.close()
+      channelRef.current = null
+    }
+    if(!roomId || !user){
+      setState(undefined)
+      return
+    }
 
     const base = import.meta.env.VITE_WS_BASE || (location.origin.replace(/^http/,'ws'))
-    const ws = new WebSocket(`${base}/ws/${roomId}?player_id=${encodeURIComponent(user.id)}`)
-
-    ws.onmessage = async (ev)=>{
-      const msg = JSON.parse(ev.data)
-      if(msg.type==='state'){
-        const s = await getState(roomId, user.id)
-        setState(s)
-      }
+    const channel = createRoomChannel({
+      wsBase: base,
+      roomId,
+      playerId: user.id,
+      onState: (next)=>{
+        setState(next)
+        setScreen('room')
+      },
+      pollIntervalMs: 3000,
+    })
+    channelRef.current = channel
+    return () => {
+      channel.close()
+      if (channelRef.current === channel) channelRef.current = null
     }
-    ws.onerror = (e)=>console.error('WS error', e)
-    wsRef.current = ws
-    return ()=>ws.close()
   }, [roomId, user?.id])
 
-  async function onPlay(card: Card){
+  const sendAction = useCallback((message: unknown)=>{
+    if (!channelRef.current) return false
+    const ok = channelRef.current.send(message)
+    if (!ok && roomId && user){
+      getState(roomId, user.id).then(setState).catch(()=>{})
+    }
+    return ok
+  }, [roomId, user?.id])
+
+  function onPlay(card: Card){
     if(!user || !roomId || !state) return
     const hasAttackOnTable = (state.table_cards?.length || 0) > 0
     const payload = { type: hasAttackOnTable ? 'cover' : 'play', player_id: user.id, card }
-    wsRef.current?.send(JSON.stringify(payload))
+    sendAction(payload)
+  }
+
+  function onDraw(){
+    if(!user || !roomId) return
+    sendAction({ type: 'draw', player_id: user.id })
   }
 
   // рендер
@@ -122,9 +143,7 @@ export default function App(){
 
           <TableView table={state.table_cards} trump={state.trump} trumpCard={state.trump_card} opponents={1} />
 
-          <div className="controls">
-            {/* Кнопка Старт внутри Controls (использует state) */}
-          </div>
+          <Controls state={state} onDraw={onDraw} />
 
           {state.hands && (
             <div>
