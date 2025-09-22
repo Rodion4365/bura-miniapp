@@ -1,84 +1,108 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card } from '../types'
 import CardView from './CardView'
 
-export default function Hand({
-  cards,
-  onPlay
-}:{
-  cards: Card[],
-  onPlay: (card: Card)=>void
-}) {
-  const containerRef = useRef<HTMLDivElement>(null)
+type Props = {
+  cards: Card[]
+  requiredCount?: number
+  isMyTurn?: boolean
+  onPlay: (cards: Card[]) => void
+}
 
-  // лёгкая анимация «раздачи» при изменении состава руки
+function cardKey(card: Card): string {
+  return `${card.suit}-${card.rank}`
+}
+
+export default function Hand({ cards, requiredCount, isMyTurn, onPlay }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [selected, setSelected] = useState<number[]>([])
+
   useEffect(()=>{
     const el = containerRef.current
     if (!el) return
     el.classList.remove('deal-anim')
-    // next tick
     const id = setTimeout(()=> el.classList.add('deal-anim'), 0)
     return ()=> clearTimeout(id)
-  }, [cards.map(c=>c.suit+':'+c.rank).join(',')])
+  }, [cards.map(cardKey).join(',')])
 
-  // простой DnD на pointer-событиях
-  function attachDrag(e: React.PointerEvent, card: Card) {
-    const target = e.currentTarget as HTMLElement
-    const ghost = target.cloneNode(true) as HTMLElement
-    const rect = target.getBoundingClientRect()
-    ghost.style.position = 'fixed'
-    ghost.style.left = `${rect.left}px`
-    ghost.style.top = `${rect.top}px`
-    ghost.style.width = `${rect.width}px`
-    ghost.style.height = `${rect.height}px`
-    ghost.style.pointerEvents = 'none'
-    ghost.style.zIndex = '9999'
-    ghost.style.transform = 'scale(1.05)'
-    ghost.style.opacity = '0.95'
-    document.body.appendChild(ghost)
+  useEffect(()=>{
+    setSelected(prev => prev.filter(index => index < cards.length))
+  }, [cards.length])
 
-    let lastX = e.clientX, lastY = e.clientY
-    let overDrop = false
+  const selectionSuit = useMemo(()=>{
+    if (requiredCount) return null
+    if (selected.length === 0) return null
+    return cards[selected[0]]?.suit ?? null
+  }, [selected, cards, requiredCount])
 
-    function onMove(ev: PointerEvent){
-      lastX = ev.clientX; lastY = ev.clientY
-      ghost.style.left = `${lastX - rect.width/2}px`
-      ghost.style.top  = `${lastY - rect.height/2}px`
+  const selectedCards = selected.map(idx => cards[idx]).filter(Boolean)
+  const maxSelectable = requiredCount ?? 3
 
-      const dz = document.getElementById('drop-zone')
-      if (dz) {
-        const dr = dz.getBoundingClientRect()
-        const inside = lastX >= dr.left && lastX <= dr.right && lastY >= dr.top && lastY <= dr.bottom
-        overDrop = inside
-        dz.classList.toggle('drop-active', inside)
-      }
+  const isSelectionValid = useMemo(()=>{
+    if (!isMyTurn) return false
+    if (requiredCount) return selectedCards.length === requiredCount
+    if (selectedCards.length === 0 || selectedCards.length > 3) return false
+    const suits = new Set(selectedCards.map(c => c.suit))
+    return suits.size === 1
+  }, [isMyTurn, requiredCount, selectedCards])
+
+  function toggle(index: number){
+    const already = selected.includes(index)
+    if (already){
+      setSelected(prev => prev.filter(i => i !== index))
+      return
     }
-    function onUp(){
-      document.removeEventListener('pointermove', onMove, true)
-      document.removeEventListener('pointerup', onUp, true)
-      const dz = document.getElementById('drop-zone')
-      dz?.classList.remove('drop-active')
-      ghost.remove()
-      if (overDrop) onPlay(card)
+    if (requiredCount){
+      if (selected.length >= requiredCount) return
+      setSelected(prev => [...prev, index])
+      return
     }
+    if (selected.length >= maxSelectable){
+      setSelected([index])
+      return
+    }
+    if (selectionSuit && cards[index]?.suit !== selectionSuit){
+      setSelected([index])
+      return
+    }
+    setSelected(prev => [...prev, index])
+  }
 
-    document.addEventListener('pointermove', onMove, true)
-    document.addEventListener('pointerup', onUp, true)
+  function handlePlay(){
+    if (!isSelectionValid) return
+    onPlay(selectedCards)
+    setSelected([])
   }
 
   return (
     <div className="hand" ref={containerRef}>
-      {cards.map((c, i)=>(
-        <div
-          key={`${c.suit}${c.rank}-${i}`}
-          className="hand-card"
-          style={{ animationDelay: `${i * 60}ms` }}
-          onPointerDown={(e)=>attachDrag(e, c)}
-          onClick={()=>onPlay(c)}
-        >
-          <CardView card={c} />
-        </div>
-      ))}
+      <div className="hand-hint">
+        {requiredCount
+          ? `Нужно выложить ${requiredCount} ${requiredCount === 1 ? 'карту' : 'карты'}`
+          : 'Выберите до трёх карт одной масти для хода'}
+      </div>
+      <div className="hand-cards">
+        {cards.map((card, index) => {
+          const isSelected = selected.includes(index)
+          return (
+            <button
+              key={`${card.suit}${card.rank}-${index}`}
+              type="button"
+              className={`hand-card ${isSelected ? 'selected' : ''}`}
+              onClick={()=>toggle(index)}
+              disabled={!isMyTurn && !isSelected}
+            >
+              <CardView card={card} />
+            </button>
+          )
+        })}
+      </div>
+      <div className="hand-actions">
+        <button className="chip" onClick={()=> setSelected([])}>Сбросить выбор</button>
+        <button className="button primary" disabled={!isSelectionValid} onClick={handlePlay}>
+          Сыграть выбранные карты
+        </button>
+      </div>
     </div>
   )
 }

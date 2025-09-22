@@ -185,19 +185,14 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
             data = await ws.receive_json()
             t = data.get("type")
             if t == "play":
-                ROOMS[room_id].play(data["player_id"], data["card"])
+                cards = data.get("cards")
+                card = data.get("card")
+                if cards is None and card is not None:
+                    cards = [card]
+                ROOMS[room_id].play(data["player_id"], cards or [])
                 await broadcast_room(room_id)
-            elif t == "cover":
-                ROOMS[room_id].cover(data["player_id"], data["card"])
-                await broadcast_room(room_id)
-            elif t == "draw":
-                ROOMS[room_id].draw_up()
-                await broadcast_room(room_id)
-            elif t == "discard":
-                ROOMS[room_id].discard(data.get("player_id"))
-                await broadcast_room(room_id)
-            elif t == "pass":
-                ROOMS[room_id].pass_turn(data.get("player_id"))
+            elif t == "declare":
+                ROOMS[room_id].declare_combination(data["player_id"], data["combo"])
                 await broadcast_room(room_id)
     except WebSocketDisconnect:
         await hub.disconnect(ws)
