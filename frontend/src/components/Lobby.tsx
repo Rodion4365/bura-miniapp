@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { TableConfig } from '../api'
 
 type Variant = { key:string; title:string; players_min:number; players_max:number }
-type RoomRow = { room_id:string; name:string; players:number; players_max:number; started:boolean; variant: Variant }
+type RoomRow = {
+  room_id:string
+  name:string
+  players:number
+  players_max:number
+  started:boolean
+  variant?: Variant
+  config?: TableConfig
+}
 
 export default function Lobby({
   headers,
@@ -102,10 +111,17 @@ export default function Lobby({
           <div key={r.room_id} className="room-card">
             <div className="room-head">
               <div className="room-name">{r.name}</div>
-              <div className="room-variant">{r.variant?.title}</div>
+              <div className="room-variant">
+                {r.variant?.title || 'Пользовательский стол'}
+              </div>
             </div>
             <div className="room-meta">
               <span className="badge">Игроков: {r.players}/{r.players_max}</span>
+              {r.config && (
+                <span className="badge">
+                  {r.config.maxPlayers} макс · {r.config.turnTimeoutSec} с · {r.config.discardVisibility === 'open' ? 'открытый сброс' : 'закрытый сброс'}
+                </span>
+              )}
               {r.started && <span className="badge warn">Игра идёт</span>}
             </div>
             <button

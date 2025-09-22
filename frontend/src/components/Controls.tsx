@@ -9,7 +9,8 @@ export default function Controls({
   state?: GameState
   onDraw: ()=>void
 }){
-  const canStart = !!state && !state.started && state.players.length >= state.variant.players_min
+  const requiredPlayers = state?.variant?.players_min ?? state?.config?.maxPlayers ?? 2
+  const canStart = !!state && !state.started && state.players.length >= requiredPlayers
   return (
     <div className="controls">
       <button

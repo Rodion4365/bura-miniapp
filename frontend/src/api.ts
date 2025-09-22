@@ -1,30 +1,24 @@
-export type Variant = {
-  key: string
-  title: string
-  players_min: number
-  players_max: number
-  description?: string
+export type DiscardVisibility = 'open' | 'faceDown'
+
+export type TableConfig = {
+  maxPlayers: 2 | 3 | 4
+  discardVisibility: DiscardVisibility
+  enableFourEnds: boolean
+  turnTimeoutSec: 30 | 40 | 50 | 60
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || ""
 
-/** Список вариантов игры */
-export async function listVariants(): Promise<Variant[]> {
-  const res = await fetch(`${API_BASE}/api/variants`, { cache: 'no-store' })
-  if (!res.ok) throw new Error('Failed to load variants')
-  return await res.json()
-}
-
 /** Создание игры */
 export async function createGame(
-  variant_key: string,
   room_name: string,
+  config: TableConfig,
   headers: Record<string, string>
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/api/game/create`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify({ variant_key, room_name }),
+    body: JSON.stringify({ room_name, config }),
   })
   const data = await res.json()
   if (!res.ok || data?.error) {
