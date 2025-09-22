@@ -1,8 +1,17 @@
 export type Suit = '♠'|'♥'|'♦'|'♣'
 export type Card = { suit: Suit; rank: number }
-export type TrickPlayOutcome = 'lead'|'beat'|'discard'
-export type TrickPlay = { player_id: string; cards: Card[]; outcome: TrickPlayOutcome }
-export type TrickState = { leader_id: string; owner_id: string; required_count: number; plays: TrickPlay[] }
+export type PublicCard = Card | { hidden: true }
+export type TrickPlayOutcome = 'lead'|'beat'|'partial'|'discard'
+export type TrickPlay = { player_id: string; seat: number; cards: PublicCard[]; outcome: TrickPlayOutcome; owner: boolean }
+export type TrickState = {
+  leader_id: string
+  leader_seat: number
+  owner_id: string
+  owner_seat: number
+  required_count: number
+  trick_index: number
+  plays: TrickPlay[]
+}
 export type Announcement = { player_id: string; combo: 'bura'|'molodka'|'moscow'|'four_ends'; cards: Card[] }
 export type DiscardVisibility = 'open'|'faceDown'
 export type TableConfig = {
@@ -23,9 +32,10 @@ export type GameState = {
   me?: Player
   trump?: Suit
   trump_card?: Card
-  table_cards: Card[]
+  table_cards: PublicCard[]
   deck_count: number
   hands?: Card[]
+  hand_counts?: Record<string, number>
   turn_player_id?: string
   winner_id?: string
   scores?: Record<string, number>
@@ -37,6 +47,7 @@ export type GameState = {
   announcements?: Announcement[]
   turn_deadline_ts?: number
   round_number?: number
+  round_id?: string
   match_over?: boolean
   winners?: string[]
   losers?: string[]

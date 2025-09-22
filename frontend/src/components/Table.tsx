@@ -1,11 +1,15 @@
 import React, { useMemo } from 'react'
-import type { GameState, Player, TrickPlay } from '../types'
+import type { Card, GameState, Player, PublicCard, TrickPlay } from '../types'
 import CardView from './CardView'
+
+type DragPreview = { cards: Card[]; valid: boolean } | null
 
 type Props = {
   state: GameState
   meId?: string
   turnSecondsLeft?: number
+  dragPreview?: DragPreview
+  onDropPlay: (cards: Card[]) => void
 }
 
 const COMBO_LABELS: Record<string, string> = {
@@ -13,6 +17,13 @@ const COMBO_LABELS: Record<string, string> = {
   molodka: 'Молодка',
   moscow: 'Москва',
   four_ends: '4 конца',
+}
+
+const OUTCOME_LABEL: Record<TrickPlay['outcome'], string> = {
+  lead: 'Ход',
+  beat: 'Перебил',
+  partial: 'Частично',
+  discard: 'Сброс',
 }
 
 function sortPlayers(players: Player[], meId?: string): Player[] {
@@ -24,136 +35,147 @@ function sortPlayers(players: Player[], meId?: string): Player[] {
   return ordered.slice(myIndex).concat(ordered.slice(0, myIndex))
 }
 
-function describeOutcome(play: TrickPlay, ownerId?: string): string {
-  if (play.outcome === 'lead') return 'Ход'
-  if (play.outcome === 'beat') return ownerId === play.player_id ? 'Перебил' : 'Перебил'
-  return 'Сброс'
+function visibleCardCount(state: GameState, playerId: string): number | undefined {
+  if (state.me?.id === playerId && state.hands) return state.hands.length
+  return state.hand_counts?.[playerId]
 }
 
-export default function TableView({ state, meId, turnSecondsLeft }: Props) {
+function trumpLabel(card?: PublicCard): string {
+  if (!card) return '—'
+  if ('hidden' in card && card.hidden) return '—'
+  const suitToEmoji: Record<string, string> = { S: '♠️', H: '♥️', D: '♦️', C: '♣️', '♠': '♠️', '♥': '♥️', '♦': '♦️', '♣': '♣️' }
+  const rankMap: Record<number, string> = { 11: 'В', 12: 'Д', 13: 'К', 14: 'Т' }
+  const rank = rankMap[(card as Card).rank] ?? (card as Card).rank
+  const suit = suitToEmoji[(card as Card).suit] ?? (card as Card).suit
+  return `${rank}${suit}`
+}
+
+export default function TableView({ state, meId, turnSecondsLeft, dragPreview, onDropPlay }: Props) {
   const orderedPlayers = useMemo(() => sortPlayers(state.players, meId), [state.players, meId])
-  const scores = state.scores || {}
-  const trickPlays = state.trick?.plays ?? []
-  const discardCards = state.discard_pile ?? []
-  const takenCounts = state.taken_counts ?? {}
-  const announcements = state.announcements ?? []
-  const winners = state.match_over ? state.winners ?? [] : []
-  const losers = state.match_over ? state.losers ?? [] : []
+  const playsMap = useMemo(() => {
+    const map = new Map<string, TrickPlay>()
+    state.trick?.plays.forEach(play => map.set(play.player_id, play))
+    return map
+  }, [state.trick?.plays])
 
-  const suitToEmoji: Record<string, string> = { S:'♠️', H:'♥️', D:'♦️', C:'♣️', s:'♠️', h:'♥️', d:'♦️', c:'♣️' }
-  const trumpEmoji = state.trump ? (suitToEmoji[state.trump] ?? state.trump) : ''
+  const slotCount = state.trick?.required_count ?? 0
+  const dropActive = Boolean(dragPreview?.valid && state.turn_player_id === meId)
 
-  const isMyTurn = state.turn_player_id && state.turn_player_id === meId
+  const handleDragOver: React.DragEventHandler<HTMLDivElement> = event => {
+    if (dropActive) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+    }
+  }
+
+  const handleDrop: React.DragEventHandler<HTMLDivElement> = event => {
+    if (!dropActive || !dragPreview) return
+    event.preventDefault()
+    onDropPlay(dragPreview.cards)
+  }
 
   return (
     <div className="table-layout">
-      <div className="score-row">
-        {orderedPlayers.map(player => (
-          <div key={player.id} className={`score-chip ${state.turn_player_id === player.id ? 'active' : ''}`}>
-            <span className="score-name">{player.name}</span>
-            <span className="score-value">Штраф: {scores[player.id] ?? 0}</span>
-            <span className="score-sub">Взято карт: {takenCounts[player.id] ?? 0}</span>
-          </div>
-        ))}
+      <div className="table-indicators">
+        <div className="indicator">Раунд {state.round_number ?? 1}</div>
+        <div className="indicator">Козырь: {trumpLabel(state.trump_card)}</div>
+        <div className="indicator">Нужно карт: {slotCount || '—'}</div>
+        <div className="indicator">Сброс: {state.config?.discardVisibility === 'open' ? 'Открыто' : 'Рубашкой'}</div>
+        <div className={`indicator timer ${state.turn_player_id === meId ? 'active' : ''}`}>
+          Таймер: {typeof turnSecondsLeft === 'number' ? `${turnSecondsLeft} c` : state.config?.turnTimeoutSec ?? '—'}
+        </div>
       </div>
 
-      <div className="table-status">
-        <div className="status-pill">Раунд {state.round_number ?? 1}</div>
-        <div className="status-pill">Колода: {state.deck_count}</div>
-        <div className="status-pill">Козырь {trumpEmoji}</div>
-        {typeof turnSecondsLeft === 'number' && (
-          <div className={`status-pill timer ${isMyTurn ? 'active' : ''}`}>
-            Ход {turnSecondsLeft} с
-          </div>
-        )}
-      </div>
-
-      {state.match_over && (
-        <div className="panel match-result">
-          <div className="panel-title">Матч завершён</div>
-          <div className="panel-body">
-            {winners.length > 0 && (
-              <div className="result-line">
-                <strong>Победители:</strong>
-                <span>{winners.map(id => state.players.find(p => p.id === id)?.name ?? id).join(', ')}</span>
-              </div>
-            )}
-            {losers.length > 0 && (
-              <div className="result-line">
-                <strong>Проигравшие:</strong>
-                <span>{losers.map(id => state.players.find(p => p.id === id)?.name ?? id).join(', ')}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="plays-board">
-        <div className="plays-header">
-          <div className="plays-title">Текущая взятка</div>
-          {state.trick?.required_count && (
-            <div className="pill">по {state.trick.required_count} карт(ы)</div>
-          )}
-        </div>
-        {trickPlays.length === 0 && <div className="plays-placeholder">Нет карт на столе</div>}
-        {trickPlays.map((play, idx) => {
-          const player = state.players.find(p => p.id === play.player_id)
+      <div className="table-opponents">
+        {orderedPlayers.map(player => {
+          const cardCount = visibleCardCount(state, player.id)
+          const isTurn = state.turn_player_id === player.id
+          const isOwner = state.trick?.owner_id === player.id
           return (
-            <div key={`${play.player_id}-${idx}`} className={`play-row ${play.player_id === state.trick?.owner_id ? 'owner' : ''}`}>
-              <div className="play-player">{player?.name || play.player_id}</div>
-              <div className="play-cards">
-                {play.cards.map((card, i) => (
-                  <CardView key={`${card.suit}${card.rank}-${i}`} card={card} />
-                ))}
-              </div>
-              <div className={`play-outcome outcome-${play.outcome}`}>{describeOutcome(play, state.trick?.owner_id)}</div>
+            <div key={player.id} className={`player-chip ${isTurn ? 'turn' : ''} ${player.id === meId ? 'me' : ''}`}>
+              <div className="chip-name">{player.name}</div>
+              <div className="chip-count">{cardCount !== undefined ? `${cardCount} карт` : '—'}</div>
+              {isOwner && <div className="chip-owner">Беру</div>}
             </div>
           )
         })}
       </div>
 
-      <div className="info-panels">
-        <div className="panel">
-          <div className="panel-title">Сброс ({state.discard_count ?? discardCards.length})</div>
-          <div className="panel-body discard-cards">
-            {discardCards.length === 0 && <span className="muted">Пока пусто</span>}
-            {discardCards.slice(-6).map((card, idx) => (
-              <CardView key={`${card.suit}${card.rank}-d${idx}`} card={card} />
-            ))}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-title">Комбинации</div>
-          <div className="panel-body combos">
-            {announcements.length === 0 && <span className="muted">Не объявлялись</span>}
-            {announcements.map((entry, idx) => {
-              const player = state.players.find(p => p.id === entry.player_id)
-              const label = COMBO_LABELS[entry.combo] ?? entry.combo
-              return (
-                <div key={`${entry.player_id}-${entry.combo}-${idx}`} className="combo-entry">
-                  <span className="combo-player">{player?.name || entry.player_id}</span>
-                  <span className="combo-name">{label}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      <div
+        className={`trick-area slots-${Math.max(slotCount, dragPreview?.cards.length ?? 0)} ${dropActive ? 'drop-active' : ''}`}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {orderedPlayers.map(player => {
+          const play = playsMap.get(player.id)
+          const cards = play?.cards ?? []
+          const showSlots = slotCount || cards.length || (dropActive ? dragPreview?.cards.length ?? 0 : 0)
+          return (
+            <div key={`row-${player.id}`} className={`trick-row ${play?.owner ? 'owner' : ''} outcome-${play?.outcome ?? 'pending'}`}>
+              <div className="trick-player">{player.name}</div>
+              <div className="trick-slots">
+                {Array.from({ length: showSlots || 1 }).map((_, idx) => (
+                  <div key={`slot-${player.id}-${idx}`} className="trick-slot">
+                    {cards[idx] ? (
+                      <CardView card={cards[idx]} muted={play?.outcome === 'partial' || play?.outcome === 'discard'} />
+                    ) : (
+                      <div className="slot-placeholder" />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="trick-outcome">{play ? OUTCOME_LABEL[play.outcome] : '—'}</div>
+            </div>
+          )
+        })}
+        {!state.trick && <div className="trick-empty">Ход лидера</div>}
+        {dropActive && <div className="drop-hint">Отпустите, чтобы сыграть</div>}
       </div>
 
-      {state.round_points && Object.keys(state.round_points).length > 0 && (
-        <div className="panel round-summary">
-          <div className="panel-title">Очки последнего раунда</div>
-          <div className="panel-body round-points">
+      <div className="table-summary">
+        <div className="summary-panel">
+          <div className="panel-title">Очки штрафа</div>
+          <div className="panel-body">
             {orderedPlayers.map(player => (
-              <div key={`pts-${player.id}`} className="round-point-row">
+              <div key={`score-${player.id}`} className="summary-row">
                 <span>{player.name}</span>
-                <span>{state.round_points?.[player.id] ?? 0}</span>
+                <span>{state.scores?.[player.id] ?? 0}</span>
               </div>
             ))}
           </div>
         </div>
-      )}
+
+        <div className="summary-panel">
+          <div className="panel-title">Взято карт</div>
+          <div className="panel-body">
+            {orderedPlayers.map(player => (
+              <div key={`taken-${player.id}`} className="summary-row">
+                <span>{player.name}</span>
+                <span>{state.taken_counts?.[player.id] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="summary-panel">
+          <div className="panel-title">Комбинации</div>
+          <div className="panel-body combos">
+            {state.announcements?.length ? (
+              state.announcements.map((entry, idx) => {
+                const player = state.players.find(p => p.id === entry.player_id)
+                return (
+                  <div key={`combo-${entry.player_id}-${idx}`} className="combo-row">
+                    <span>{player?.name ?? entry.player_id}</span>
+                    <span>{COMBO_LABELS[entry.combo] ?? entry.combo}</span>
+                  </div>
+                )
+              })
+            ) : (
+              <span className="muted">Не объявлялись</span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

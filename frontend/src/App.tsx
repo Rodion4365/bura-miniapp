@@ -24,6 +24,8 @@ export default function App(){
   const [state, setState] = useState<GameState>()
   const [now, setNow] = useState(() => Date.now())
   const [screen, setScreen] = useState<Screen>('menu')
+  const [dragPreview, setDragPreview] = useState<{cards: Card[]; valid: boolean} | null>(null)
+  const [playStamp, setPlayStamp] = useState(0)
   const channelRef = useRef<RoomChannel | null>(null)
 
   // Тема
@@ -95,11 +97,19 @@ export default function App(){
     return ok
   }, [roomId, user?.id])
 
-  function onPlay(cards: Card[]){
+  function onPlay(cards: Card[], meta?: { viaDrop?: boolean }){
     if(!user || !roomId || !state) return
     if(cards.length === 0) return
-    const payload = { type: 'play', player_id: user.id, cards }
+    const payload = {
+      type: 'play_cards',
+      player_id: user.id,
+      cards,
+      roundId: state.round_id,
+      trickIndex: state.trick?.trick_index,
+    }
     sendAction(payload)
+    setPlayStamp(Date.now())
+    setDragPreview(null)
   }
 
   function onDeclare(combo: string){
@@ -172,7 +182,13 @@ export default function App(){
             </div>
           </header>
 
-          <TableView state={state} meId={user?.id} turnSecondsLeft={turnSecondsLeft} />
+          <TableView
+            state={state}
+            meId={user?.id}
+            turnSecondsLeft={turnSecondsLeft}
+            dragPreview={dragPreview}
+            onDropPlay={(cards)=> onPlay(cards, { viaDrop: true })}
+          />
 
           <Controls state={state} onDeclare={onDeclare} />
 
@@ -181,9 +197,13 @@ export default function App(){
               <h4 className="hand-title">Твои карты</h4>
               <Hand
                 cards={state.hands}
-                requiredCount={state.trick?.required_count}
+                trick={state.trick}
+                trump={state.trump}
                 isMyTurn={state.turn_player_id === user?.id}
+                playStamp={playStamp}
+                meId={user?.id}
                 onPlay={onPlay}
+                onDragPreview={setDragPreview}
               />
             </div>
           )}

@@ -8,6 +8,16 @@ class Card(BaseModel):
     suit: Suit
     rank: int  # 6..14 (11=J,12=Q,13=K,14=A)
 
+
+class PublicCard(BaseModel):
+    suit: Optional[Suit] = None
+    rank: Optional[int] = None
+    hidden: bool = False
+
+    @classmethod
+    def hidden_card(cls) -> "PublicCard":
+        return cls(hidden=True)
+
 class Player(BaseModel):
     id: str
     name: str
@@ -47,14 +57,19 @@ class Action(BaseModel):
 
 class TrickPlay(BaseModel):
     player_id: str
-    cards: List[Card]
-    outcome: Literal["lead", "beat", "discard"]
+    seat: int
+    cards: List[PublicCard]
+    outcome: Literal["lead", "beat", "partial", "discard"]
+    owner: bool = False
 
 
 class TrickState(BaseModel):
     leader_id: str
+    leader_seat: int
     owner_id: str
+    owner_seat: int
     required_count: int
+    trick_index: int
     plays: List[TrickPlay] = Field(default_factory=list)
 
 
@@ -73,9 +88,10 @@ class GameState(BaseModel):
     me: Optional[Player]
     trump: Optional[Suit]
     trump_card: Optional[Card]
-    table_cards: List[Card]
+    table_cards: List[PublicCard]
     deck_count: int
     hands: Optional[List[Card]] = None
+    hand_counts: Dict[str, int] = Field(default_factory=dict)
     turn_player_id: Optional[str] = None
     winner_id: Optional[str] = None
     scores: Dict[str, int] = Field(default_factory=dict)
@@ -87,6 +103,7 @@ class GameState(BaseModel):
     announcements: List[Announcement] = Field(default_factory=list)
     turn_deadline_ts: Optional[float] = None
     round_number: int = 0
+    round_id: Optional[str] = None
     match_over: bool = False
     winners: List[str] = Field(default_factory=list)
     losers: List[str] = Field(default_factory=list)

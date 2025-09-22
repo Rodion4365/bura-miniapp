@@ -184,12 +184,17 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
         while True:
             data = await ws.receive_json()
             t = data.get("type")
-            if t == "play":
+            if t in {"play", "play_cards"}:
                 cards = data.get("cards")
                 card = data.get("card")
                 if cards is None and card is not None:
                     cards = [card]
-                ROOMS[room_id].play(data["player_id"], cards or [])
+                kwargs = {}
+                if "roundId" in data:
+                    kwargs["round_id"] = data["roundId"]
+                if "trickIndex" in data:
+                    kwargs["trick_index"] = data["trickIndex"]
+                ROOMS[room_id].play_cards(data["player_id"], cards or [], **kwargs)
                 await broadcast_room(room_id)
             elif t == "declare":
                 ROOMS[room_id].declare_combination(data["player_id"], data["combo"])
