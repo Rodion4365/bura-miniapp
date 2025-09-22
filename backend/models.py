@@ -44,6 +44,25 @@ class Action(BaseModel):
     type: Literal["play","cover","discard","pass"]
     card: Optional[Card] = None
 
+
+class TrickPlay(BaseModel):
+    player_id: str
+    cards: List[Card]
+    outcome: Literal["lead", "beat", "discard"]
+
+
+class TrickState(BaseModel):
+    leader_id: str
+    owner_id: str
+    required_count: int
+    plays: List[TrickPlay] = Field(default_factory=list)
+
+
+class Announcement(BaseModel):
+    player_id: str
+    combo: Literal["bura", "molodka", "moscow", "four_ends"]
+    cards: List[Card]
+
 class GameState(BaseModel):
     room_id: str
     room_name: str
@@ -60,5 +79,17 @@ class GameState(BaseModel):
     turn_player_id: Optional[str] = None
     winner_id: Optional[str] = None
     scores: Dict[str, int] = Field(default_factory=dict)
+    trick: Optional[TrickState] = None
+    discard_pile: List[Card] = Field(default_factory=list)
+    discard_count: int = 0
+    taken_counts: Dict[str, int] = Field(default_factory=dict)
+    round_points: Dict[str, int] = Field(default_factory=dict)
+    announcements: List[Announcement] = Field(default_factory=list)
+    turn_deadline_ts: Optional[float] = None
+    round_number: int = 0
+    match_over: bool = False
+    winners: List[str] = Field(default_factory=list)
+    losers: List[str] = Field(default_factory=list)
+    last_trick_winner_id: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")

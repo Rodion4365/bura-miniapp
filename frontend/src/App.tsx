@@ -22,6 +22,7 @@ export default function App(){
   const [headers, setHeaders] = useState<Record<string,string>>({})
   const [roomId, setRoomId] = useState<string>()
   const [state, setState] = useState<GameState>()
+  const [now, setNow] = useState(() => Date.now())
   const [screen, setScreen] = useState<Screen>('menu')
   const channelRef = useRef<RoomChannel | null>(null)
 
@@ -94,27 +95,28 @@ export default function App(){
     return ok
   }, [roomId, user?.id])
 
-  function onPlay(card: Card){
+  function onPlay(cards: Card[]){
     if(!user || !roomId || !state) return
-    const hasAttackOnTable = (state.table_cards?.length || 0) > 0
-    const payload = { type: hasAttackOnTable ? 'cover' : 'play', player_id: user.id, card }
+    if(cards.length === 0) return
+    const payload = { type: 'play', player_id: user.id, cards }
     sendAction(payload)
   }
 
-  function onDraw(){
-    if(!user || !roomId) return
-    sendAction({ type: 'draw', player_id: user.id })
+  function onDeclare(combo: string){
+    if(!user || !roomId || !state) return
+    sendAction({ type: 'declare', player_id: user.id, combo })
   }
 
-  function onPass(){
-    if(!user || !roomId) return
-    sendAction({ type: 'pass', player_id: user.id })
-  }
+  useEffect(()=>{
+    if(!state?.turn_deadline_ts) return
+    setNow(Date.now())
+    const id = setInterval(()=> setNow(Date.now()), 1000)
+    return ()=> clearInterval(id)
+  }, [state?.turn_deadline_ts])
 
-  function onDiscard(){
-    if(!user || !roomId) return
-    sendAction({ type: 'discard', player_id: user.id })
-  }
+  const turnSecondsLeft = state?.turn_deadline_ts
+    ? Math.max(0, Math.ceil(state.turn_deadline_ts - now / 1000))
+    : undefined
 
   // рендер
   return (
@@ -170,14 +172,19 @@ export default function App(){
             </div>
           </header>
 
-          <TableView state={state} meId={user?.id} />
+          <TableView state={state} meId={user?.id} turnSecondsLeft={turnSecondsLeft} />
 
-          <Controls state={state} onDraw={onDraw} onPass={onPass} onDiscard={onDiscard} />
+          <Controls state={state} onDeclare={onDeclare} />
 
           {state.hands && (
             <div className="hand-wrap">
               <h4 className="hand-title">Твои карты</h4>
-              <Hand cards={state.hands} onPlay={onPlay} />
+              <Hand
+                cards={state.hands}
+                requiredCount={state.trick?.required_count}
+                isMyTurn={state.turn_player_id === user?.id}
+                onPlay={onPlay}
+              />
             </div>
           )}
 

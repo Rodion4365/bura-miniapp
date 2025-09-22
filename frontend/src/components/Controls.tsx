@@ -2,32 +2,50 @@ import React from 'react'
 import type { GameState } from '../types'
 import { startGame } from '../api'
 
-export default function Controls({
-  state,
-  onDraw,
-  onPass,
-  onDiscard
-}:{
+type Props = {
   state?: GameState
-  onDraw: ()=>void
-  onPass: ()=>void
-  onDiscard: ()=>void
-}){
+  onDeclare: (combo: string) => void
+}
+
+const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string; hint: string }[] = [
+  { key: 'bura', label: 'Бура', hint: '4 козыря' },
+  { key: 'molodka', label: 'Молодка', hint: '4 карты одной масти' },
+  { key: 'moscow', label: 'Москва', hint: '3 туза с козырным' },
+  { key: 'four_ends', label: '4 конца', hint: '4 десятки или 4 туза' },
+]
+
+export default function Controls({ state, onDeclare }: Props){
   const requiredPlayers = state?.config?.maxPlayers ?? state?.variant?.players_min ?? 2
   const canStart = !!state && !state.started && state.players.length >= requiredPlayers
-  const canAct = !!state?.started
+  const canDeclare = !!state?.started && !state?.trick && !state?.match_over
+  const combos = COMBOS.filter(combo => combo.key !== 'four_ends' || state?.config?.enableFourEnds)
+
   return (
     <div className="controls">
       <button
         className="button"
         disabled={!canStart}
         onClick={()=> state?.room_id && startGame(state.room_id)}
+        type="button"
       >
         Старт
       </button>
-      <button className="button secondary" disabled={!canAct} onClick={onPass}>Отбиться</button>
-      <button className="button secondary" disabled={!canAct} onClick={onDiscard}>Сбросить карты</button>
-      <button className="button secondary" onClick={onDraw}>Добор</button>
+
+      <div className="combo-panel">
+        <span className="combo-title">Комбинации:</span>
+        {combos.map(combo => (
+          <button
+            key={combo.key}
+            className="chip"
+            disabled={!canDeclare}
+            onClick={()=> onDeclare(combo.key)}
+            title={combo.hint}
+            type="button"
+          >
+            {combo.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
