@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createRoomChannel } from '../room-channel'
 import StartGame from '../components/StartGame'
-import { getState } from '../api'
 
 type RoomProps = { roomId: string; onExit?: () => void }
 
@@ -31,9 +30,18 @@ export default function Room({ roomId, onExit }: RoomProps) {
 
   useEffect(() => {
     if (!rid || !playerId) return
-    const ch = createRoomChannel({ wsBase, roomId: rid, playerId, onState: setState, pollIntervalMs: 3000 })
-    getState(rid, playerId).then(setState).catch(() => {})
-    return () => ch.close()
+    let cancelled = false
+    const ch = createRoomChannel({
+      wsBase,
+      roomId: rid,
+      playerId,
+      pollIntervalMs: 3000,
+      onState: (st) => { if (!cancelled) setState(st) },
+    })
+    return () => {
+      cancelled = true
+      ch.close()
+    }
   }, [rid, playerId, wsBase])
 
   const playersCount = state?.players?.length ?? 0
