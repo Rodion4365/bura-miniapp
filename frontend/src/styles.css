@@ -61,3 +61,81 @@ body { margin: 0; }
 .badge.warn{background:#fff7e6;border:1px solid #fde1a8}
 .controls{display:flex;gap:8}
 .input{flex:1 1 auto;padding:10px 12px;border:1px solid #ddd;border-radius:10px}
+
+/* ======= THEME (light/dark) ======= */
+:root{
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #666;
+  --card: #ffffff;
+  --border: #e7e7e7;
+  --primary: #111111;
+  --primary-fg: #ffffff;
+
+  /* если Telegram дал переменные — они перекроют дефолты */
+  /* пример: var(--tg-bg_color), var(--tg-text_color) и т.п. */
+}
+html[data-theme="dark"]{
+  --bg: #0f1115;
+  --fg: #f3f3f3;
+  --muted: #9aa3ad;
+  --card: #12141a;
+  --border: #222733;
+  --primary: #f3f3f3;
+  --primary-fg: #0f1115;
+}
+
+body, .app{
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ======= MAIN MENU ======= */
+.menu-wrap{
+  min-height: 70vh;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap: 16px; text-align:center;
+}
+.menu-title{ font-size: 28px; font-weight: 800; margin: 0 0 6px; }
+.menu-actions{ display:flex; gap: 12px; flex-wrap: wrap; justify-content:center; }
+.btn-xl{
+  padding: 14px 20px; border-radius: 14px; border:1px solid var(--border);
+  background: var(--card); color: var(--fg); font-weight: 800; font-size: 16px;
+}
+.btn-xl.primary{ background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+.menu-note{ font-size: 12px; opacity: .7; }
+
+/* ======= PAGES ======= */
+.page-wrap{ display:grid; gap: 12px; padding: 12px; }
+.page-title{ font-size: 20px; font-weight: 800; margin: 2px 0 6px; }
+.link-btn{ background:none; border:none; color: var(--muted); text-decoration: underline; padding: 6px 0; }
+
+/* ======= LOBBY ======= */
+.lobby-wrap{ display:grid; gap: 12px; }
+.lobby-toolbar{ display:flex; gap: 8px; align-items:center; }
+.search-row{ display:flex; gap:8px; flex:1; }
+.icon-btn{ border:1px solid var(--border); background: var(--card); border-radius: 10px; padding: 8px 10px; }
+.rooms-grid{ display:grid; gap: 10px; grid-template-columns: 1fr; }
+.room-card{
+  border:1px solid var(--border); background: var(--card); border-radius: 14px; padding: 12px; display:grid; gap:10px;
+}
+.room-head{ display:flex; flex-direction:column; gap:4px; }
+.room-name{ font-weight: 800; }
+.room-variant{ font-size: 12px; color: var(--muted); }
+.room-meta{ display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+.button.full{ width:100%; }
+
+/* ======= COMMON UI ======= */
+.input{ flex:1 1 auto; padding:10px 12px; border:1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--fg); }
+.button{
+  padding:10px 12px; border-radius: 10px; border:1px solid var(--border); background: var(--card); color: var(--fg); font-weight: 700;
+}
+.button.primary{ background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+.badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 10px; border-radius: 999px; border:1px solid var(--border); background: var(--card); color: var(--muted); font-size: 12px;
+}
+.badge.strong{ color: var(--fg); font-weight: 700; }
+
+/* (Существующие стили стола/карт остаются; темы применятся за счёт переменных) */
