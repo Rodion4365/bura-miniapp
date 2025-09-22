@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Literal
 
 from models import (
     Announcement,
@@ -11,6 +12,7 @@ from models import (
     GameState,
     GameVariant,
     Player,
+    PublicCard,
     TableConfig,
     TrickPlay,
     TrickState,
@@ -42,20 +44,54 @@ def _make_deck() -> List[Card]:
 
 
 @dataclass
+class _TrickPlayInternal:
+    player_id: str
+    seat: int
+    cards: List[Card]
+    outcome: Literal["lead", "beat", "partial", "discard"]
+    owner: bool = False
+
+
+@dataclass
 class _TrickInternal:
     leader_id: str
+    leader_seat: int
     required_count: int
     owner_id: str
+    owner_seat: int
     owner_cards: List[Card]
-    captured_cards: List[Card] = field(default_factory=list)
-    plays: List[TrickPlay] = field(default_factory=list)
+    trick_index: int
+    plays: List[_TrickPlayInternal] = field(default_factory=list)
 
-    def to_public(self) -> TrickState:
+    def to_public(self, *, viewer_id: Optional[str], discard_visibility: str) -> TrickState:
+        plays: List[TrickPlay] = []
+        for play in self.plays:
+            show_cards = (
+                discard_visibility == "open"
+                or play.outcome in ("lead", "beat")
+                or play.player_id == viewer_id
+            )
+            public_cards = [
+                PublicCard(suit=card.suit, rank=card.rank) if show_cards else PublicCard.hidden_card()
+                for card in play.cards
+            ]
+            plays.append(
+                TrickPlay(
+                    player_id=play.player_id,
+                    seat=play.seat,
+                    cards=public_cards,
+                    outcome=play.outcome,
+                    owner=play.owner,
+                )
+            )
         return TrickState(
             leader_id=self.leader_id,
+            leader_seat=self.leader_seat,
             owner_id=self.owner_id,
+            owner_seat=self.owner_seat,
             required_count=self.required_count,
-            plays=list(self.plays),
+            trick_index=self.trick_index,
+            plays=plays,
         )
 
 
@@ -84,8 +120,10 @@ class Room:
         self.dealer_idx: int = 0
 
         self.round_number: int = 0
+        self.round_id: Optional[str] = None
         self.round_active: bool = False
         self.round_summary: Dict[str, int] = {}
+        self.trick_index: int = 0
 
         self.winner_id: Optional[str] = None
         self.match_over: bool = False
@@ -148,6 +186,7 @@ class Room:
         if not self.players:
             return
         self.round_number += 1
+        self.round_id = f"r_{self.round_number}"
         self.round_active = True
         self.deck = _make_deck()
         random.shuffle(self.deck)
@@ -159,6 +198,7 @@ class Room:
         self.taken_cards = {p.id: [] for p in self.players}
         self.hands = {p.id: [] for p in self.players}
         self.current_trick = None
+        self.trick_index = 0
 
         for _ in range(4):
             for pl in self.players:
@@ -178,6 +218,12 @@ class Room:
         for idx, player in enumerate(self.players):
             if player.id == player_id:
                 return idx
+        raise ValueError("Unknown player")
+
+    def _player_seat(self, player_id: str) -> int:
+        for player in self.players:
+            if player.id == player_id:
+                return player.seat or 0
         raise ValueError("Unknown player")
 
     def current_player_id(self) -> Optional[str]:
@@ -212,15 +258,26 @@ class Room:
             return True
         return False
 
-    def _cards_fully_beat(self, challenger: Iterable[Card], owner_cards: Iterable[Card]) -> bool:
-        challenger_cards = list(challenger)
-        remaining = challenger_cards.copy()
-        for owner_card in owner_cards:
-            idx = next((i for i, card in enumerate(remaining) if self._beats(card, owner_card)), None)
-            if idx is None:
-                return False
-            remaining.pop(idx)
-        return True
+    def _max_beat_count(self, challenger: Sequence[Card], owner_cards: Sequence[Card]) -> int:
+        owner_list = list(owner_cards)
+        challenger_list = list(challenger)
+        used = [False] * len(challenger_list)
+
+        def helper(owner_idx: int) -> int:
+            if owner_idx >= len(owner_list):
+                return 0
+            best = helper(owner_idx + 1)
+            owner_card = owner_list[owner_idx]
+            for idx, card in enumerate(challenger_list):
+                if used[idx]:
+                    continue
+                if self._beats(card, owner_card):
+                    used[idx] = True
+                    best = max(best, 1 + helper(owner_idx + 1))
+                    used[idx] = False
+            return best
+
+        return helper(0)
 
     def _draw_up_from_deck(self, winner_id: str):
         if not self.deck:
@@ -310,12 +367,21 @@ class Room:
             return []
         return []
 
-    def play(self, player_id: str, cards_payload: List[dict | Card]):
+    def play_cards(
+        self,
+        player_id: str,
+        cards_payload: List[dict | Card],
+        *,
+        round_id: Optional[str] = None,
+        trick_index: Optional[int] = None,
+    ):
         self._check_timeout()
         if not self.started or not self.round_active:
             raise ValueError("Round not active")
         if player_id != self.current_player_id():
             raise ValueError("Not your turn")
+        if round_id is not None and self.round_id is not None and round_id != self.round_id:
+            raise ValueError("Round mismatch")
         if not isinstance(cards_payload, list) or not cards_payload:
             raise ValueError("Must play one or more cards")
 
@@ -326,6 +392,8 @@ class Room:
             if not any(c.suit == card.suit and c.rank == card.rank for c in hand):
                 raise ValueError("Card not in hand")
 
+        seat = self._player_seat(player_id)
+
         if self.current_trick is None:
             if len(cards) not in (1, 2, 3):
                 raise ValueError("Leader must play 1, 2 or 3 cards")
@@ -334,25 +402,56 @@ class Room:
             min_available = min(len(self.hands[p.id]) for p in self.players)
             if len(cards) > min_available:
                 raise ValueError("Other players do not have enough cards")
-            self.current_trick = _TrickInternal(
+            self.trick_index += 1
+            trick = _TrickInternal(
                 leader_id=player_id,
+                leader_seat=seat,
                 required_count=len(cards),
                 owner_id=player_id,
+                owner_seat=seat,
                 owner_cards=list(cards),
+                trick_index=self.trick_index,
             )
-            self.current_trick.plays.append(TrickPlay(player_id=player_id, cards=list(cards), outcome="lead"))
+            trick.plays.append(
+                _TrickPlayInternal(
+                    player_id=player_id,
+                    seat=seat,
+                    cards=list(cards),
+                    outcome="lead",
+                    owner=True,
+                )
+            )
+            self.current_trick = trick
         else:
             trick = self.current_trick
+            if trick_index is not None and trick_index != trick.trick_index:
+                raise ValueError("Trick mismatch")
             if len(cards) != trick.required_count:
                 raise ValueError("Must play the required number of cards")
-            if self._cards_fully_beat(cards, trick.owner_cards):
-                trick.captured_cards.extend(trick.owner_cards)
+            beat_count = self._max_beat_count(cards, trick.owner_cards)
+            if beat_count == trick.required_count:
+                outcome: Literal["beat", "partial", "discard"] = "beat"
+                for play in trick.plays:
+                    play.owner = False
                 trick.owner_id = player_id
+                trick.owner_seat = seat
                 trick.owner_cards = list(cards)
-                trick.plays.append(TrickPlay(player_id=player_id, cards=list(cards), outcome="beat"))
+                owner_flag = True
+            elif beat_count > 0:
+                outcome = "partial"
+                owner_flag = False
             else:
-                self.discard_pile.extend(cards)
-                trick.plays.append(TrickPlay(player_id=player_id, cards=list(cards), outcome="discard"))
+                outcome = "discard"
+                owner_flag = False
+            trick.plays.append(
+                _TrickPlayInternal(
+                    player_id=player_id,
+                    seat=seat,
+                    cards=list(cards),
+                    outcome=outcome,
+                    owner=owner_flag,
+                )
+            )
 
         for card in cards:
             idx = next(i for i, owned in enumerate(hand) if owned.suit == card.suit and owned.rank == card.rank)
@@ -365,13 +464,17 @@ class Room:
         else:
             self._refresh_deadline()
 
+    def play(self, player_id: str, cards_payload: List[dict | Card]):
+        self.play_cards(player_id, cards_payload)
+
     def _complete_trick(self):
         trick = self.current_trick
         if not trick:
             return
         winner_id = trick.owner_id
-        cards_for_winner = trick.captured_cards + trick.owner_cards
+        cards_for_winner = [card for play in trick.plays for card in play.cards]
         self.taken_cards[winner_id].extend(cards_for_winner)
+        self.discard_pile.extend(cards_for_winner)
         self.last_trick_winner_id = winner_id
         self.current_trick = None
         self.turn_idx = self._player_index(winner_id)
@@ -405,9 +508,17 @@ class Room:
 
     def to_state(self, me_id: Optional[str]) -> GameState:
         self._check_timeout()
-        trick_public = self.current_trick.to_public() if self.current_trick else None
+        trick_public = (
+            self.current_trick.to_public(
+                viewer_id=me_id,
+                discard_visibility=self.config.discard_visibility,
+            )
+            if self.current_trick
+            else None
+        )
         discard_cards = list(self.discard_pile) if self.config.discard_visibility == "open" else []
         hands = self.hands.get(me_id)
+        hand_counts = {pid: len(hand) for pid, hand in self.hands.items()}
         return GameState(
             room_id=self.id,
             room_name=self.name,
@@ -421,6 +532,7 @@ class Room:
             table_cards=[card for play in (trick_public.plays if trick_public else []) for card in play.cards],
             deck_count=len(self.deck),
             hands=list(hands) if hands is not None else None,
+            hand_counts=hand_counts,
             turn_player_id=self.players[self.turn_idx].id if self.players and self.round_active else None,
             winner_id=self.winner_id,
             scores=self.scores,
@@ -432,6 +544,7 @@ class Room:
             announcements=list(self.announcements),
             turn_deadline_ts=self.turn_deadline,
             round_number=self.round_number,
+            round_id=self.round_id,
             match_over=self.match_over,
             winners=list(self.winners),
             losers=list(self.losers),

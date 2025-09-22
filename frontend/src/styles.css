@@ -289,3 +289,58 @@ html[data-theme="dark"] .pill{ background:rgba(255,255,255,.08); color:var(--fg)
 
 .card.red .card-rank,
 .card.red .card-suit{ color:#d33; }
+
+/* ===== New game table layout ===== */
+.table-layout{display:grid;gap:16px;margin-top:12px}
+.table-indicators{display:flex;flex-wrap:wrap;gap:8px}
+.indicator{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:var(--card);font-size:12px;color:var(--muted)}
+.indicator.timer.active{color:var(--primary);border-color:var(--primary)}
+.table-opponents{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.player-chip{position:relative;min-width:120px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--card);display:grid;gap:4px;text-align:center;transition:transform .15s ease,box-shadow .15s ease}
+.player-chip.turn{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 25%,transparent);transform:translateY(-2px)}
+.player-chip.me{border-style:dashed}
+.chip-name{font-weight:700;font-size:14px}
+.chip-count{font-size:12px;color:var(--muted)}
+.chip-owner{position:absolute;top:-10px;right:-10px;background:var(--primary);color:var(--primary-fg);padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+
+.trick-area{position:relative;border:2px dashed var(--border);border-radius:18px;padding:16px;display:grid;gap:12px;min-height:200px;background:color-mix(in srgb,var(--card) 85%, transparent)}
+.trick-area.drop-active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 12%, var(--card) 88%)}
+.trick-row{display:grid;grid-template-columns:120px 1fr 80px;align-items:center;gap:12px;padding:6px 8px;border-radius:12px;background:rgba(0,0,0,.02)}
+html[data-theme="dark"] .trick-row{background:rgba(255,255,255,.04)}
+.trick-row.owner{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 35%, transparent)}
+.trick-player{font-weight:700}
+.trick-slots{display:flex;gap:8px;flex-wrap:wrap}
+.trick-slot{width:72px;height:104px;border:1px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.03)}
+html[data-theme="dark"] .trick-slot{background:rgba(255,255,255,.04)}
+.slot-placeholder{width:100%;height:100%;border-radius:inherit;background:rgba(0,0,0,.05)}
+.trick-outcome{font-size:12px;color:var(--muted);text-align:right}
+.trick-empty{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--muted);font-size:14px}
+.drop-hint{position:absolute;bottom:16px;right:16px;padding:8px 14px;border-radius:999px;background:var(--primary);color:var(--primary-fg);font-size:12px;font-weight:700;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.05);}100%{transform:scale(1);}}
+
+.table-summary{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.summary-panel{border:1px solid var(--border);border-radius:14px;background:var(--card);display:grid}
+.panel-title{padding:10px 12px;font-weight:700;border-bottom:1px solid var(--border)}
+.panel-body{padding:10px 12px;display:grid;gap:6px}
+.summary-row{display:flex;justify-content:space-between;font-size:13px}
+.combo-row{display:flex;justify-content:space-between;font-size:13px}
+
+/* ===== Hand ===== */
+.hand{display:grid;gap:12px;padding:12px;border:1px solid var(--border);border-radius:18px;background:var(--card);outline:none;transition:box-shadow .2s ease}
+.hand.dragging{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 25%, transparent)}
+.hand-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.hand-hint{font-weight:700;font-size:14px}
+.hand-meta{display:flex;gap:8px;flex-wrap:wrap}
+.hand-feedback{font-size:13px;color:var(--muted);min-height:18px}
+.hand-feedback.error{color:#d33;animation:shake .18s linear 2}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
+.hand-cards{display:flex;flex-wrap:wrap;gap:10px}
+.hand-card{border:none;background:transparent;padding:0;cursor:pointer;position:relative;transition:transform .15s ease}
+.hand-card.selected{transform:translateY(-8px)}
+.hand-card.incompatible{opacity:.4}
+.hand-card:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
+.hand-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+
+.card.hidden{background:repeating-linear-gradient(45deg,rgba(0,0,0,.08),rgba(0,0,0,.08) 6px,rgba(0,0,0,0) 6px,rgba(0,0,0,0) 12px);color:var(--muted)}
+.card.muted{opacity:.7}
+.card.red .card-rank,.card.red .card-suit{color:#c23838}
