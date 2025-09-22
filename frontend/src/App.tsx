@@ -1,114 +1,193 @@
-import { useEffect, useRef, useState } from 'react'
-import './styles.css'
-import Tabs from './components/Tabs'
-import VariantSelector from './components/VariantSelector'
-import Lobby from './components/Lobby'
-import Controls from './components/Controls'
-import TableView from './components/Table'
-import Hand from './components/Hand'
-import { getState, verify } from './api'
-import type { GameState, Card } from './types'
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { API_BASE, WS_BASE, fetchVariants, createRoom, startGame } from "./api";
+import JoinTab from "./components/JoinTab";
 
-declare global { interface Window { Telegram: any } }
+type Variant = { key: string; title: string; players_min: number; players_max: number; description?: string };
+type Card = { suit: string; rank: string };
+type PlayerState = { id: string; name: string; hand: Card[] };
+type RoomState = {
+  id: string;
+  name: string;
+  variant_title: string;
+  players: PlayerState[];
+  players_min: number;
+  players_max: number;
+  table: { attack: Card[]; defend: Card[] };
+  trump?: Card | null;
+  deck_count: number;
+  current_turn?: string | null;
+};
 
-export default function App(){
-  const tg = window.Telegram?.WebApp
-  const [user, setUser] = useState<{id:string; name:string; avatar?:string}>()
-  const [headers, setHeaders] = useState<Record<string,string>>({})
-  const [roomId, setRoomId] = useState<string>()
-  const [state, setState] = useState<GameState>()
-  const [tab, setTab] = useState<'new'|'join'>('new')
-  const wsRef = useRef<WebSocket | null>(null)
+function useHeaders() {
+  // Telegram init-data или guest
+  const [h, setH] = useState<Record<string,string>>({
+    "x-user-id": "guest",
+    "x-user-name": "Guest",
+    "x-user-avatar": "",
+  });
 
   useEffect(() => {
-    tg?.expand?.()
-    const run = async () => {
+    try {
+      // если встроено в Telegram, можно подтянуть из initData
+      // сейчас оставить guest, чтобы не блокировать работу
+    } catch {}
+  }, []);
+
+  return h;
+}
+
+export default function App() {
+  const headers = useHeaders();
+  const [tab, setTab] = useState<"new"|"join">("new");
+
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const [variantKey, setVariantKey] = useState<string>("classic_2p");
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomState, setRoomState] = useState<RoomState | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    fetchVariants().then(setVariants).catch(() => {});
+  }, []);
+
+  // подключение к комнате по WS
+  function connectRoomWS(id: string, playerId: string) {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    const ws = new WebSocket(`${WS_BASE}/ws/${id}?player_id=${encodeURIComponent(playerId)}`);
+    wsRef.current = ws;
+
+    ws.onmessage = (ev) => {
       try {
-        const initData = tg?.initData || ''
-        if (!initData) throw new Error('No initData')
-        const u = await verify(initData)
-        setUser({ id: u.user_id, name: u.name, avatar: u.avatar_url })
-        setHeaders({ 'x-user-id': u.user_id, 'x-user-name': encodeURIComponent(u.name), 'x-user-avatar': u.avatar_url || '' })
-      } catch (err) {
-        console.error('Auth failed, fallback to guest:', err)
-        const unsafe = tg?.initDataUnsafe?.user
-        const id = unsafe?.id ? String(unsafe.id) : 'guest'
-        const name = unsafe?.first_name || 'Guest'
-        setUser({ id, name })
-        setHeaders({ 'x-user-id': id, 'x-user-name': encodeURIComponent(name), 'x-user-avatar': '' })
-      } finally {
-        tg?.ready?.()
-      }
-    }
-    run()
-  }, [])
-
-  useEffect(()=>{
-    if(!roomId || !user) return
-    getState(roomId, user.id).then(setState)
-    const base = import.meta.env.VITE_WS_BASE || (location.origin.replace(/^http/,'ws'))
-    const ws = new WebSocket(`${base}/ws/${roomId}?player_id=${encodeURIComponent(user.id)}`)
-    ws.onmessage = async (ev)=>{
-      const msg = JSON.parse(ev.data)
-      if(msg.type==='state'){
-        const s = await getState(roomId, user.id)
-        setState(s)
-      }
-    }
-    ws.onerror = (e)=>console.error('WS error', e)
-    wsRef.current = ws
-    return ()=>ws.close()
-  }, [roomId, user?.id])
-
-  async function onPlay(card: Card){
-    if(!user || !roomId || !state) return
-    const hasAttackOnTable = (state.table_cards?.length || 0) > 0
-    const payload = { type: hasAttackOnTable ? 'cover' : 'play', player_id: user.id, card }
-    wsRef.current?.send(JSON.stringify(payload))
+        const msg = JSON.parse(ev.data);
+        if (msg?.type === "state") {
+          setRoomState(msg.payload as RoomState);
+        }
+      } catch {}
+    };
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
   }
 
-  const topTabs = [
-    { key: 'new',  title: 'Новая игра' },
-    { key: 'join', title: 'Присоединиться' },
-  ]
+  async function handleCreate() {
+    const v = variants.find(v => v.key === variantKey);
+    const res = await createRoom(variantKey, "Комната", headers);
+    if (res?.room_id) {
+      setRoomId(res.room_id);
+      // создатель тоже должен быть в WS комнаты и получать live-обновления
+      connectRoomWS(res.room_id, headers["x-user-id"]);
+      setTab("new"); // остаёмся в своей комнате
+    }
+  }
+
+  async function handleStart() {
+    if (!roomId) return;
+    await startGame(roomId);
+    // сервер разошлёт новое состояние, мы его примем из ws.onmessage
+  }
+
+  const canStart = useMemo(() => {
+    if (!roomState) return false;
+    // кнопка активна только если игроков >= players_min
+    const p = roomState.players?.length ?? 0;
+    return p >= (roomState.players_min ?? 2);
+  }, [roomState]);
 
   return (
-    <div className="app">
-      <h2>Бура</h2>
-      {user && (<div className="row">
-        <div className="badge">{user.name}</div>
-        {state && <div className="badge">Комната: {state.room_id}</div>}
-      </div>)}
+    <div className="p-4 max-w-3xl mx-auto">
+      <h1 className="text-3xl font-bold mb-4">Бура</h1>
 
-      {!roomId && (<>
-        <Tabs tabs={topTabs} active={tab} onChange={(k)=>setTab(k as any)} />
-        <div style={{marginTop:12}}>
-          {tab==='new'  && <VariantSelector headers={headers} onCreated={(id)=>setRoomId(id)} />}
-          {tab==='join' && <Lobby           headers={headers} onJoined ={(id)=>setRoomId(id)} />}
-        </div>
-      </>)}
+      {/* Табы */}
+      <div className="flex gap-2 mb-6">
+        <button
+          className={"tab " + (tab === "new" ? "active" : "")}
+          onClick={() => setTab("new")}
+        >
+          Новая игра
+        </button>
+        <button
+          className={"tab " + (tab === "join" ? "active" : "")}
+          onClick={() => setTab("join")}
+        >
+          Присоединиться
+        </button>
+      </div>
 
-      {roomId && state && (
-        <div className="grid" style={{marginTop:12}}>
-          <TableView table={state.table_cards} trump={state.trump} trumpCard={state.trump_card} opponents={1} />
+      {/* Содержимое вкладок */}
+      {tab === "join" ? (
+        <JoinTab
+          headers={headers}
+          onJoined={(id) => {
+            setRoomId(id);
+            connectRoomWS(id, headers["x-user-id"]);
+            setTab("new"); // после присоединения переходим в стол
+          }}
+        />
+      ) : (
+        <div className="space-y-4">
+          {/* Создание комнаты */}
+          {!roomId && (
+            <div className="flex items-center gap-3">
+              <select
+                className="border rounded-lg p-2"
+                value={variantKey}
+                onChange={(e) => setVariantKey(e.target.value)}
+              >
+                {variants.map((v) => (
+                  <option key={v.key} value={v.key}>
+                    {v.title} ({v.players_min}–{v.players_max})
+                  </option>
+                ))}
+              </select>
+              <button className="px-3 py-2 rounded-lg bg-black text-white" onClick={handleCreate}>
+                Создать
+              </button>
+            </div>
+          )}
 
-          <div className="row">
-            <div className="badge">Игроков: {state.players.length}/{state.variant.players_max}</div>
-            <div className="badge">Колода: {state.deck_count}</div>
-            <div className="badge">Ход: {state.turn_player_id?.slice(0,4) || '—'}</div>
-          </div>
+          {/* Стол */}
+          {roomId && (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-500">Комната: {roomId}</div>
+              <div className="flex items-center gap-3">
+                <div className="text-sm">
+                  Игроков: {roomState?.players?.length ?? 0}/{roomState?.players_max ?? "—"}
+                </div>
+                <button
+                  className="px-3 py-2 rounded-lg bg-black text-white disabled:opacity-40"
+                  onClick={handleStart}
+                  disabled={!canStart}
+                >
+                  Старт
+                </button>
+              </div>
 
-          <Controls
-            state={state}
-            onDraw={()=> wsRef.current?.send(JSON.stringify({type:'draw'}))}
-          />
-
-          {state.hands && (<div>
-            <h4>Твоя рука</h4>
-            <Hand cards={state.hands} onPlay={onPlay} />
-          </div>)}
+              {/* Упрощённая визуализация: козырь и зона стола */}
+              <div className="flex gap-10 items-start">
+                <div className="text-center">
+                  <div className="text-sm text-gray-500 mb-2">Козырь</div>
+                  <div className="w-16 h-24 rounded-xl border flex items-center justify-center text-2xl bg-gray-50">
+                    {roomState?.trump ? "🂠" : "?"}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm text-gray-500 mb-2">Стол</div>
+                  <div className="min-h-[100px] rounded-xl border p-3">
+                    {/* здесь можно рисовать attack/defend */}
+                    {roomState?.table?.attack?.length
+                      ? <div className="text-sm">Карты на столе: {roomState.table.attack.length}</div>
+                      : <div className="text-sm text-gray-400">Пока пусто</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
-  )
+  );
 }

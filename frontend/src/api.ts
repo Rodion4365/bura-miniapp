@@ -1,25 +1,52 @@
-import axios from 'axios'
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+export const API_BASE =
+  (import.meta.env.VITE_API_BASE as string) ||
+  (location.hostname.endsWith("buragame.ru")
+    ? "https://api.buragame.ru"
+    : "https://bura-miniapp.onrender.com");
 
-export async function verify(initData: string) {
-  const { data } = await axios.post(`${API_BASE}/api/auth/verify?init_data=${encodeURIComponent(initData)}`)
-  return data as { ok: boolean; user_id: string; name: string; avatar_url?: string }
+export const WS_BASE =
+  (import.meta.env.VITE_WS_BASE as string) ||
+  (location.hostname.endsWith("buragame.ru")
+    ? "wss://api.buragame.ru"
+    : "wss://bura-miniapp.onrender.com");
+
+export type RoomSummary = {
+  id: string;
+  name: string;
+  variant_title: string;
+  players: number;
+  players_max: number;
+};
+
+export async function fetchVariants() {
+  const r = await fetch(`${API_BASE}/api/variants`);
+  return r.json();
 }
-export async function listVariants() {
-  const { data } = await axios.get(`${API_BASE}/api/variants`)
-  return data
+
+export async function fetchRooms(): Promise<RoomSummary[]> {
+  const r = await fetch(`${API_BASE}/api/rooms`);
+  return r.json();
 }
-export async function createGame(variant_key: string, room_name: string, userHeaders: Record<string,string>) {
-  const { data } = await axios.post(`${API_BASE}/api/game/create`, { variant_key, room_name }, { headers: userHeaders })
-  return data as { room_id: string }
+
+export async function createRoom(variant_key: string, room_name: string, headers: Record<string,string>) {
+  const r = await fetch(`${API_BASE}/api/game/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ variant_key, room_name }),
+  });
+  return r.json();
 }
-export async function joinGame(room_id: string, userHeaders: Record<string,string>) {
-  await axios.post(`${API_BASE}/api/game/join`, { room_id }, { headers: userHeaders })
+
+export async function joinRoom(room_id: string, headers: Record<string,string>) {
+  const r = await fetch(`${API_BASE}/api/game/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ room_id }),
+  });
+  return r.json();
 }
+
 export async function startGame(room_id: string) {
-  await axios.post(`${API_BASE}/api/game/start/${room_id}`)
-}
-export async function getState(room_id: string, user_id?: string) {
-  const { data } = await axios.get(`${API_BASE}/api/game/state/${room_id}`, { headers: user_id ? { 'x-user-id': user_id } : {} })
-  return data
+  const r = await fetch(`${API_BASE}/api/game/start/${room_id}`, { method: "POST" });
+  return r.json();
 }
