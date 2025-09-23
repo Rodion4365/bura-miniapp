@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './styles.css'
 import MainMenu from './components/MainMenu'
 import CreateTableForm from './components/CreateTableForm'
@@ -6,6 +6,7 @@ import Lobby from './components/Lobby'
 import Controls from './components/Controls'
 import TableView from './components/Table'
 import Hand from './components/Hand'
+import ScoreBoard from './components/ScoreBoard'
 import { getState, verify } from './api'
 import type { GameState, Card } from './types'
 import { applyThemeOnce, watchTelegramTheme } from './theme'
@@ -28,6 +29,11 @@ export default function App(){
   const [dragPreview, setDragPreview] = useState<{cards: Card[]; valid: boolean} | null>(null)
   const [playStamp, setPlayStamp] = useState(0)
   const channelRef = useRef<RoomChannel | null>(null)
+  const cardAssets = useMemo(() => {
+    const map = new Map<string, Card>()
+    state?.cards?.forEach(card => map.set(card.id, card))
+    return map
+  }, [state?.cards])
 
   // Тема
   useEffect(() => {
@@ -111,6 +117,7 @@ export default function App(){
       cards,
       roundId: state.round_id,
       trickIndex: state.trick?.trick_index,
+      faceUp: state.config?.discardVisibility !== 'faceDown',
     }
     sendAction(payload)
     setPlayStamp(Date.now())
@@ -129,7 +136,7 @@ export default function App(){
     return ()=> clearInterval(id)
   }, [state?.turn_deadline_ts])
 
-  const turnSecondsLeft = state?.turn_deadline_ts
+  const fallbackTimer = state?.turn_deadline_ts
     ? Math.max(0, Math.ceil(state.turn_deadline_ts - now / 1000))
     : undefined
 
@@ -170,35 +177,31 @@ export default function App(){
 
       {screen === 'room' && state && (
         <div className="game-page">
-          <header className="game-hud">
-            <div className="hud-primary">
-              <div className="hud-title">{state.room_name}</div>
-              <div className="hud-sub">Комната #{state.room_id}</div>
+          <section className="game-settings">
+            <div className="settings-head">
+              <div className="settings-title">{state.room_name}</div>
+              <div className="settings-sub">Комната #{state.room_id}</div>
             </div>
-            <div className="hud-stats">
-              <span className="pill">Игроков {state.players.length}/{state.config?.maxPlayers ?? state.variant?.players_max ?? state.players.length}</span>
-              <span className="pill">Колода {state.deck_count}</span>
-              <span className="pill">Ход: {state.turn_player_id?.slice(0, 4) || '—'}</span>
+            <div className="settings-pills">
+              <span className="meta-chip">Игроков {state.players.length}/{state.config?.maxPlayers ?? state.variant?.players_max ?? state.players.length}</span>
               {state.config && (
-                <span className="pill">
-                  Таймер {state.config.turnTimeoutSec} с · {state.config.discardVisibility === 'open' ? 'открытый' : 'закрытый'} сброс
-                </span>
+                <span className="meta-chip">Сброс: {state.config.discardVisibility === 'open' ? 'открытый' : 'закрытый'}</span>
               )}
             </div>
-          </header>
+            <Controls state={state} onDeclare={onDeclare} />
+          </section>
 
           <TableView
             state={state}
             meId={user?.id}
-            turnSecondsLeft={turnSecondsLeft}
             dragPreview={dragPreview}
             onDropPlay={(cards)=> onPlay(cards, { viaDrop: true })}
+            cardAssets={cardAssets}
+            fallbackTimer={fallbackTimer}
           />
 
-          <Controls state={state} onDeclare={onDeclare} />
-
           {state.hands && (
-            <div className="hand-wrap">
+            <section className="hand-wrap">
               <h4 className="hand-title">Твои карты</h4>
               <Hand
                 cards={state.hands}
@@ -210,8 +213,10 @@ export default function App(){
                 onPlay={onPlay}
                 onDragPreview={setDragPreview}
               />
-            </div>
+            </section>
           )}
+
+          <ScoreBoard totals={state.player_totals} />
 
           <button className="link-btn" onClick={()=> { setRoomId(undefined); setScreen('menu'); }}>
             ← Выйти в меню

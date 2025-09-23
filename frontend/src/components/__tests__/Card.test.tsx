@@ -2,12 +2,20 @@ import { render, screen } from '@testing-library/react'
 import { expect, test } from 'vitest'
 import CardView from '../CardView'
 
-test('renders face values and suits', () => {
-  render(<CardView card={{ suit: '♠', rank: 14 }} />)
-  expect(screen.getByTitle('Т♠')).toBeInTheDocument()
+const sampleCard = {
+  id: 'c_as',
+  suit: '♠' as const,
+  rank: 14,
+  imageUrl: 'face.png',
+  backImageUrl: 'back.png',
+}
+
+test('renders face values with accessible alt', () => {
+  render(<CardView cardId={sampleCard.id} asset={sampleCard} faceUp />)
+  expect(screen.getByRole('img')).toHaveAttribute('alt', 'Т♠')
 })
 
-test('renders number ranks', () => {
-  render(<CardView card={{ suit: '♥', rank: 9 }} />)
-  expect(screen.getByTitle('9♥')).toBeInTheDocument()
+test('renders hidden card label when face down', () => {
+  render(<CardView cardId={sampleCard.id} asset={sampleCard} faceUp={false} />)
+  expect(screen.getByLabelText('Скрытая карта')).toBeInTheDocument()
 })
