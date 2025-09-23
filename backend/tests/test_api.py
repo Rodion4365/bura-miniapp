@@ -58,3 +58,34 @@ def test_create_with_custom_config():
     assert data["config"]["maxPlayers"] == 4
     assert data["config"]["discardVisibility"] == "faceDown"
     assert data["variant"]["key"] == "custom"
+
+
+def test_ws_invalid_action_returns_error_without_disconnect():
+    headers_a = {"x-user-id":"userA","x-user-name":"User A","x-user-avatar":""}
+    create_resp = client.post(
+        "/api/game/create",
+        json={"variant_key": "classic_2p", "room_name": "WS"},
+        headers=headers_a,
+    )
+    assert create_resp.status_code == 200
+    room_id = create_resp.json()["room_id"]
+
+    headers_b = {"x-user-id":"userB","x-user-name":"User B","x-user-avatar":""}
+    join_resp = client.post("/api/game/join", json={"room_id": room_id}, headers=headers_b)
+    assert join_resp.status_code == 200
+
+    start_resp = client.post(f"/api/game/start/{room_id}")
+    assert start_resp.status_code == 200
+
+    with client.websocket_connect(f"/ws/{room_id}?player_id=userA") as ws:
+        first_message = ws.receive_json()
+        assert first_message["type"] == "state"
+
+        ws.send_json({"type": "declare", "player_id": "userA", "combo": "unknown"})
+        error_message = ws.receive_json()
+        assert error_message["type"] == "error"
+        assert "Unknown combination" in error_message["error"]
+
+        ws.send_json({"type": "declare", "player_id": "userA", "combo": "unknown"})
+        repeat_error = ws.receive_json()
+        assert repeat_error["type"] == "error"
