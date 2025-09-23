@@ -166,15 +166,10 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
             )
           })}
           {previewCards.map(card => (
-            <CardView
-              key={`preview-${card.id}`}
-              cardId={card.id}
-              faceUp
-              asset={card}
-              muted
-            />
+            <CardView key={`preview-${card.id}`} cardId={card.id} faceUp asset={card} muted />
           ))}
         </div>
+
         {board.defender.length > 0 && (
           <div className="lane defender">
             {board.defender.map(card => {
@@ -199,10 +194,14 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
             })}
           </div>
         )}
+
         {dropActive && <div className="drop-hint">Отпустите карты, чтобы сыграть</div>}
       </div>
+
       {board.revealUntilTs && (
-        <div className="reveal-indicator">Смена хода через {(Math.max(0, Math.ceil((board.revealUntilTs * 1000 - Date.now()) / 1000)))}с</div>
+        <div className="reveal-indicator">
+          Смена хода через {Math.max(0, Math.ceil((board.revealUntilTs * 1000 - Date.now()) / 1000))}с
+        </div>
       )}
     </section>
   )

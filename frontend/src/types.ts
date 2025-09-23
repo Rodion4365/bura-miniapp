@@ -1,5 +1,6 @@
-export type Suit = '♠'|'♥'|'♦'|'♣'
-export type CardColor = 'red'|'black'
+export type Suit = '♠' | '♥' | '♦' | '♣'
+export type CardColor = 'red' | 'black'
+
 export type Card = {
   id: string
   suit: Suit
@@ -17,8 +18,16 @@ export type PublicCard = {
   color?: CardColor
   imageUrl?: string
 }
-export type TrickPlayOutcome = 'lead'|'beat'|'partial'|'discard'
-export type TrickPlay = { player_id: string; seat: number; cards: PublicCard[]; outcome: TrickPlayOutcome; owner: boolean }
+
+export type TrickPlayOutcome = 'lead' | 'beat' | 'partial' | 'discard'
+export type TrickPlay = {
+  player_id: string
+  seat: number
+  cards: PublicCard[]
+  outcome: TrickPlayOutcome
+  owner: boolean
+}
+
 export type TrickState = {
   leader_id: string
   leader_seat: number
@@ -28,16 +37,37 @@ export type TrickState = {
   trick_index: number
   plays: TrickPlay[]
 }
-export type Announcement = { player_id: string; combo: 'bura'|'molodka'|'moscow'|'four_ends'; cards: Card[] }
-export type DiscardVisibility = 'open'|'faceDown'
+
+export type Announcement = {
+  player_id: string
+  combo: 'bura' | 'molodka' | 'moscow' | 'four_ends'
+  cards: Card[]
+}
+
+export type DiscardVisibility = 'open' | 'faceDown'
+
 export type TableConfig = {
-  maxPlayers: 2|3|4
+  maxPlayers: 2 | 3 | 4
   discardVisibility: DiscardVisibility
   enableFourEnds: boolean
-  turnTimeoutSec: 30|40|50|60
+  turnTimeoutSec: 30 | 40 | 50 | 60
 }
-export type Variant = { key: string; title: string; players_min: number; players_max: number; description: string }
-export type Player = { id: string; name: string; avatar_url?: string; seat?: number }
+
+export type Variant = {
+  key: string
+  title: string
+  players_min: number
+  players_max: number
+  description: string
+}
+
+export type Player = {
+  id: string
+  name: string
+  avatar_url?: string
+  seat?: number
+}
+
 export type BoardCard = {
   cardId: string
   faceUp: boolean
@@ -47,8 +77,27 @@ export type BoardCard = {
   imageUrl?: string
   backImageUrl?: string
 }
-export type BoardState = { attacker: BoardCard[]; defender: BoardCard[]; revealUntilTs?: number }
-export type PlayerClock = { playerId: string; name: string; turnTimerSec?: number; isActive?: boolean }
+
+export type BoardState = {
+  attacker: BoardCard[]
+  defender: BoardCard[]
+  revealUntilTs?: number
+}
+
+export type PlayerClock = {
+  playerId: string
+  name: string
+  turnTimerSec?: number
+  isActive?: boolean
+}
+
+export type PlayerTotals = {
+  player_id: string
+  name: string
+  score: number
+  points: number
+}
+
 export type GameState = {
   room_id: string
   room_name: string
@@ -83,11 +132,4 @@ export type GameState = {
   cards?: Card[]
   board?: BoardState
   tablePlayers?: PlayerClock[]
-}
-
-export type PlayerTotals = {
-  player_id: string
-  name: string
-  score: number
-  points: number
 }

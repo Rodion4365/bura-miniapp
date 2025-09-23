@@ -653,6 +653,7 @@ class Room:
         discard_cards = list(self.discard_pile) if self.config.discard_visibility == "open" else []
         hands = self.hands.get(me_id)
         hand_counts = {pid: len(hand) for pid, hand in self.hands.items()}
+
         def _board_entry(card: PublicCard) -> BoardCard:
             catalog_card = self.card_catalog.get(card.card_id)
             return BoardCard(
@@ -678,6 +679,7 @@ class Room:
                 defender=[_board_entry(card) for card in defender_cards],
                 reveal_until_ts=self.reveal_until_ts if reveal_active else None,
             )
+
         active_player_id = self.current_player_id() if self.round_active else None
         table_players = []
         now_ts = time.time()
@@ -694,8 +696,10 @@ class Room:
                     is_active=is_active,
                 )
             )
+
         cards_catalog = list(self.card_catalog.values())
         cards_catalog.sort(key=lambda c: c.id)
+
         return GameState(
             room_id=self.id,
             room_name=self.name,

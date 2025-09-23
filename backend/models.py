@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-Suit = Literal["♠","♥","♦","♣"]
+Suit = Literal["♠", "♥", "♦", "♣"]
 
 SUIT_COLOR: Dict[Suit, Literal["red", "black"]] = {
     "♠": "black",
@@ -47,7 +47,7 @@ class Card(BaseModel):
     image_url: Optional[str] = Field(default=None, alias="imageUrl")
     back_image_url: Optional[str] = Field(default=None, alias="backImageUrl")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     @model_validator(mode="before")
     @classmethod
@@ -80,7 +80,7 @@ class PublicCard(BaseModel):
     color: Optional[Literal["red", "black"]] = None
     image_url: Optional[str] = Field(default=None, alias="imageUrl")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     @classmethod
     def hidden_card(cls, card_id: str) -> "PublicCard":
@@ -90,8 +90,8 @@ class PublicCard(BaseModel):
     @classmethod
     def fill_defaults(cls, value):
         if isinstance(value, dict):
-            face_up = value.get("faceUp")
-            if face_up is False:
+            # Do not auto-fill for hidden cards
+            if value.get("faceUp") is False:
                 return value
             suit = value.get("suit")
             rank = value.get("rank")
@@ -119,7 +119,7 @@ class BoardCard(BaseModel):
     image_url: Optional[str] = Field(default=None, alias="imageUrl")
     back_image_url: Optional[str] = Field(default=None, alias="backImageUrl")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     @model_validator(mode="before")
     @classmethod
@@ -144,7 +144,7 @@ class BoardState(BaseModel):
     defender: List[BoardCard] = Field(default_factory=list)
     reveal_until_ts: Optional[float] = Field(default=None, alias="revealUntilTs")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
 class PlayerClock(BaseModel):
@@ -153,7 +153,8 @@ class PlayerClock(BaseModel):
     turn_timer_sec: Optional[int] = Field(default=None, alias="turnTimerSec")
     is_active: bool = Field(default=False, alias="isActive")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
 
 class Player(BaseModel):
     id: str
@@ -161,8 +162,9 @@ class Player(BaseModel):
     avatar_url: Optional[str] = None
     seat: Optional[int] = None
 
+
 class GameVariant(BaseModel):
-    key: Literal["classic_3p","classic_2p","with_sevens","with_draw", "custom"]
+    key: Literal["classic_3p", "classic_2p", "with_sevens", "with_draw", "custom"]
     title: str
     players_min: int
     players_max: int
@@ -177,6 +179,7 @@ class TableConfig(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
+
 class CreateGameRequest(BaseModel):
     room_name: str
     variant_key: Optional[GameVariant.__annotations__["key"]] = None
@@ -184,11 +187,13 @@ class CreateGameRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
+
 class JoinGameRequest(BaseModel):
     room_id: str
 
+
 class Action(BaseModel):
-    type: Literal["play","cover","discard","pass"]
+    type: Literal["play", "cover", "discard", "pass"]
     card: Optional[Card] = None
 
 
@@ -214,6 +219,7 @@ class Announcement(BaseModel):
     player_id: str
     combo: Literal["bura", "molodka", "moscow", "four_ends"]
     cards: List[Card]
+
 
 class PlayerTotals(BaseModel):
     player_id: str
