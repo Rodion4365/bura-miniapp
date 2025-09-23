@@ -1,6 +1,22 @@
 export type Suit = '♠'|'♥'|'♦'|'♣'
-export type Card = { suit: Suit; rank: number }
-export type PublicCard = Card | { hidden: true }
+export type CardColor = 'red'|'black'
+export type Card = {
+  id: string
+  suit: Suit
+  rank: number
+  color?: CardColor
+  imageUrl?: string
+  backImageUrl?: string
+}
+
+export type PublicCard = {
+  cardId: string
+  faceUp: boolean
+  suit?: Suit
+  rank?: number
+  color?: CardColor
+  imageUrl?: string
+}
 export type TrickPlayOutcome = 'lead'|'beat'|'partial'|'discard'
 export type TrickPlay = { player_id: string; seat: number; cards: PublicCard[]; outcome: TrickPlayOutcome; owner: boolean }
 export type TrickState = {
@@ -22,6 +38,9 @@ export type TableConfig = {
 }
 export type Variant = { key: string; title: string; players_min: number; players_max: number; description: string }
 export type Player = { id: string; name: string; avatar_url?: string; seat?: number }
+export type BoardCard = { cardId: string; faceUp: boolean }
+export type BoardState = { attacker: BoardCard[]; defender: BoardCard[]; revealUntilTs?: number }
+export type PlayerClock = { playerId: string; name: string; turnTimerSec?: number; isActive?: boolean }
 export type GameState = {
   room_id: string
   room_name: string
@@ -52,4 +71,15 @@ export type GameState = {
   winners?: string[]
   losers?: string[]
   last_trick_winner_id?: string
+  player_totals?: PlayerTotals[]
+  cards?: Card[]
+  board?: BoardState
+  tablePlayers?: PlayerClock[]
+}
+
+export type PlayerTotals = {
+  player_id: string
+  name: string
+  score: number
+  points: number
 }

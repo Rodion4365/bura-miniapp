@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import random
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence
 from typing import Literal
 
 from models import (
     Announcement,
+    BoardCard,
+    BoardState,
     Card,
     GameState,
     GameVariant,
     Player,
+    PlayerClock,
     PublicCard,
+    PlayerTotals,
     TableConfig,
     TrickPlay,
     TrickState,
@@ -20,6 +25,11 @@ from models import (
 
 SUITS = ["♠", "♥", "♦", "♣"]
 RANKS = [6, 7, 8, 9, 10, 11, 12, 13, 14]
+RANK_IMAGE_CODES = {6: "6", 7: "7", 8: "8", 9: "9", 10: "0", 11: "J", 12: "Q", 13: "K", 14: "A"}
+SUIT_IMAGE_CODES = {"♠": "S", "♣": "C", "♦": "D", "♥": "H"}
+
+REVEAL_DELAY_SECONDS = 5
+CARD_BACK_IMAGE_URL = "https://deckofcardsapi.com/static/img/back.png"
 
 CARD_POINTS: Dict[int, int] = {
     14: 11,  # Ace
@@ -39,8 +49,33 @@ COMBINATION_NAMES = {
 }
 
 
+def _card_color(suit: str) -> Literal["red", "black"]:
+    return "red" if suit in ("♥", "♦") else "black"
+
+
+def _card_image_url(suit: str, rank: int) -> Optional[str]:
+    suit_code = SUIT_IMAGE_CODES.get(suit)
+    rank_code = RANK_IMAGE_CODES.get(rank)
+    if not suit_code or not rank_code:
+        return None
+    return f"https://deckofcardsapi.com/static/img/{rank_code}{suit_code}.png"
+
+
 def _make_deck() -> List[Card]:
-    return [Card(suit=suit, rank=rank) for suit in SUITS for rank in RANKS]
+    deck: List[Card] = []
+    for suit in SUITS:
+        for rank in RANKS:
+            deck.append(
+                Card(
+                    id=f"c_{RANK_IMAGE_CODES[rank].lower()}{SUIT_IMAGE_CODES[suit].lower()}",
+                    suit=suit,
+                    rank=rank,
+                    color=_card_color(suit),
+                    image_url=_card_image_url(suit, rank),
+                    back_image_url=CARD_BACK_IMAGE_URL,
+                )
+            )
+    return deck
 
 
 @dataclass
@@ -71,10 +106,21 @@ class _TrickInternal:
                 or play.outcome in ("lead", "beat")
                 or play.player_id == viewer_id
             )
-            public_cards = [
-                PublicCard(suit=card.suit, rank=card.rank) if show_cards else PublicCard.hidden_card()
-                for card in play.cards
-            ]
+            public_cards: List[PublicCard] = []
+            for card in play.cards:
+                if show_cards:
+                    public_cards.append(
+                        PublicCard(
+                            cardId=card.id,
+                            faceUp=True,
+                            suit=card.suit,
+                            rank=card.rank,
+                            color=card.color,
+                            imageUrl=card.image_url,
+                        )
+                    )
+                else:
+                    public_cards.append(PublicCard.hidden_card(card.id))
             plays.append(
                 TrickPlay(
                     player_id=play.player_id,
@@ -105,6 +151,7 @@ class Room:
         self.started = False
 
         self.deck: List[Card] = []
+        self.card_catalog: Dict[str, Card] = {}
         self.trump: Optional[str] = None
         self.trump_card: Optional[Card] = None
         self.hands: Dict[str, List[Card]] = {}
@@ -124,6 +171,10 @@ class Room:
         self.round_active: bool = False
         self.round_summary: Dict[str, int] = {}
         self.trick_index: int = 0
+        self.reveal_snapshot: Optional[_TrickInternal] = None
+        self.reveal_until_ts: Optional[float] = None
+        self.pending_turn_resume: bool = False
+        self.pending_round_start: bool = False
 
         self.winner_id: Optional[str] = None
         self.match_over: bool = False
@@ -131,6 +182,7 @@ class Room:
         self.losers: List[str] = []
 
         self.scores: Dict[str, int] = {}
+        self.game_wins: Dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Lobby management
@@ -147,6 +199,7 @@ class Room:
         self.players.append(p)
         self.hands.setdefault(p.id, [])
         self.scores.setdefault(p.id, 0)
+        self.game_wins.setdefault(p.id, 0)
 
     def remove_player(self, player_id: str):
         self.players = [p for p in self.players if p.id != player_id]
@@ -154,6 +207,7 @@ class Room:
         self.taken_cards.pop(player_id, None)
         self.scores.pop(player_id, None)
         self.declared_combos.pop(player_id, None)
+        self.game_wins.pop(player_id, None)
         if self.players:
             self.turn_idx %= len(self.players)
         else:
@@ -180,6 +234,7 @@ class Room:
         self.last_trick_winner_id = None
         self.dealer_idx = random.randrange(len(self.players))
         self.round_number = 0
+        self.game_wins = {p.id: 0 for p in self.players}
         self._start_new_round(initial=True)
 
     def _start_new_round(self, *, initial: bool):
@@ -188,7 +243,9 @@ class Room:
         self.round_number += 1
         self.round_id = f"r_{self.round_number}"
         self.round_active = True
-        self.deck = _make_deck()
+        base_deck = _make_deck()
+        self.card_catalog = {card.id: card for card in base_deck}
+        self.deck = list(base_deck)
         random.shuffle(self.deck)
         self.trump_card = self.deck[-1] if self.deck else None
         self.trump = self.trump_card.suit if self.trump_card else None
@@ -199,6 +256,10 @@ class Room:
         self.hands = {p.id: [] for p in self.players}
         self.current_trick = None
         self.trick_index = 0
+        self.reveal_snapshot = None
+        self.reveal_until_ts = None
+        self.pending_turn_resume = False
+        self.pending_round_start = False
 
         for _ in range(4):
             for pl in self.players:
@@ -249,7 +310,22 @@ class Room:
         penalties = {p.id: 0 for p in self.players}
         penalties[offender] = 6
         self.round_summary = {p.id: 0 for p in self.players}
-        self._finalize_round(penalties)
+        self._finalize_round(penalties, [])
+
+    def _check_reveal(self):
+        if self.reveal_until_ts is None:
+            return
+        if time.time() < self.reveal_until_ts:
+            return
+        self.reveal_until_ts = None
+        self.reveal_snapshot = None
+        if self.pending_round_start and not self.match_over:
+            self.pending_round_start = False
+            self._start_new_round(initial=False)
+            return
+        if self.pending_turn_resume and self.round_active:
+            self.pending_turn_resume = False
+            self._refresh_deadline()
 
     def _beats(self, a: Card, b: Card) -> bool:
         if a.suit == b.suit:
@@ -297,22 +373,6 @@ class Room:
             pid: sum(CARD_POINTS.get(card.rank, 0) for card in cards)
             for pid, cards in self.taken_cards.items()
         }
-
-    def _finalize_round(self, penalties: Dict[str, int]):
-        for pid, value in penalties.items():
-            self.scores[pid] = self.scores.get(pid, 0) + value
-        self.round_active = False
-        self.current_trick = None
-        self.turn_deadline = None
-        self.match_over = any(score >= 12 for score in self.scores.values())
-        if self.match_over:
-            self.losers = [pid for pid, score in self.scores.items() if score >= 12]
-            self.winners = [pid for pid in self.scores.keys() if pid not in self.losers]
-            self.winner_id = self.winners[0] if len(self.winners) == 1 else None
-            self.started = False
-            return
-        self.winner_id = None
-        self._start_new_round(initial=False)
 
     # ------------------------------------------------------------------
     # Public API
@@ -367,6 +427,28 @@ class Room:
             return []
         return []
 
+    def _is_valid_four_card_throw(self, cards: Sequence[Card]) -> bool:
+        if len(cards) != 4:
+            return False
+        suits = {card.suit for card in cards}
+        if len(suits) == 1:
+            return True
+        ranks = [card.rank for card in cards]
+        rank_counts = Counter(ranks)
+        if len(rank_counts) == 1:
+            return True
+        tens = rank_counts.get(10, 0)
+        # 3 одного ранга + 1 десятка
+        if any(count == 3 for rank, count in rank_counts.items() if rank != 10) and tens >= 1:
+            return True
+        # 2 одного ранга + 2 десятки
+        if any(count == 2 for rank, count in rank_counts.items() if rank != 10) and tens >= 2:
+            return True
+        # 1 туз + 3 десятки
+        if rank_counts.get(14, 0) == 1 and tens == 3:
+            return True
+        return False
+
     def play_cards(
         self,
         player_id: str,
@@ -376,6 +458,9 @@ class Room:
         trick_index: Optional[int] = None,
     ):
         self._check_timeout()
+        self._check_reveal()
+        if self.reveal_until_ts is not None:
+            raise ValueError("Ожидайте завершения текущего розыгрыша")
         if not self.started or not self.round_active:
             raise ValueError("Round not active")
         if player_id != self.current_player_id():
@@ -395,10 +480,14 @@ class Room:
         seat = self._player_seat(player_id)
 
         if self.current_trick is None:
-            if len(cards) not in (1, 2, 3):
-                raise ValueError("Leader must play 1, 2 or 3 cards")
-            if len({card.suit for card in cards}) != 1:
-                raise ValueError("Leader cards must share suit")
+            if len(cards) == 4:
+                if not self._is_valid_four_card_throw(cards):
+                    raise ValueError("Нельзя скинуть выбранные 4 карты")
+            else:
+                if len(cards) not in (1, 2, 3):
+                    raise ValueError("Leader must play 1, 2 or 3 cards")
+                if len({card.suit for card in cards}) != 1:
+                    raise ValueError("Leader cards must share suit")
             min_available = min(len(self.hands[p.id]) for p in self.players)
             if len(cards) > min_available:
                 raise ValueError("Other players do not have enough cards")
@@ -476,20 +565,23 @@ class Room:
         self.taken_cards[winner_id].extend(cards_for_winner)
         self.discard_pile.extend(cards_for_winner)
         self.last_trick_winner_id = winner_id
+        self.reveal_snapshot = trick
+        self.reveal_until_ts = time.time() + REVEAL_DELAY_SECONDS
         self.current_trick = None
         self.turn_idx = self._player_index(winner_id)
         self._draw_up_from_deck(winner_id)
+        self.turn_deadline = None
         if self._round_finished():
             points = self._calculate_round_result()
             self.round_summary = points
-            penalties = self._calculate_penalties(points)
-            self._finalize_round(penalties)
+            penalties, leaders = self._calculate_penalties(points)
+            self._finalize_round(penalties, leaders)
         else:
-            self._refresh_deadline()
+            self.pending_turn_resume = True
 
-    def _calculate_penalties(self, points: Dict[str, int]) -> Dict[str, int]:
+    def _calculate_penalties(self, points: Dict[str, int]) -> tuple[Dict[str, int], List[str]]:
         if not points:
-            return {p.id: 0 for p in self.players}
+            return ({p.id: 0 for p in self.players}, [])
         max_points = max(points.values()) if points else 0
         leaders = [pid for pid, value in points.items() if value == max_points]
         penalties: Dict[str, int] = {}
@@ -504,21 +596,94 @@ class Room:
                 penalties[pid] = 6
             else:
                 penalties[pid] = 4
-        return penalties
+        return penalties, leaders
+
+    def _finalize_round(self, penalties: Dict[str, int], leaders: List[str]):
+        for pid, value in penalties.items():
+            self.scores[pid] = self.scores.get(pid, 0) + value
+        for pid in leaders:
+            self.game_wins[pid] = self.game_wins.get(pid, 0) + 1
+        self.round_active = False
+        self.current_trick = None
+        self.turn_deadline = None
+        self.pending_turn_resume = False
+        self.match_over = any(score >= 12 for score in self.scores.values())
+        if self.match_over:
+            self.losers = [pid for pid, score in self.scores.items() if score >= 12]
+            self.winners = [pid for pid in self.scores.keys() if pid not in self.losers]
+            self.winner_id = self.winners[0] if len(self.winners) == 1 else None
+            self.pending_round_start = False
+            self.started = False
+            return
+        self.winner_id = None
+        self.pending_round_start = True
+
+    def _collect_player_totals(self) -> List[PlayerTotals]:
+        totals: List[PlayerTotals] = []
+        for player in self.players:
+            pid = player.id
+            taken_cards = self.taken_cards.get(pid, [])
+            points = sum(CARD_POINTS.get(card.rank, 0) for card in taken_cards)
+            totals.append(
+                PlayerTotals(
+                    player_id=pid,
+                    name=player.name,
+                    score=self.game_wins.get(pid, 0),
+                    points=points,
+                )
+            )
+        return totals
 
     def to_state(self, me_id: Optional[str]) -> GameState:
         self._check_timeout()
+        self._check_reveal()
+        trick_source = self.current_trick
+        reveal_active = False
+        if trick_source is None and self.reveal_snapshot is not None and self.reveal_until_ts:
+            trick_source = self.reveal_snapshot
+            reveal_active = True
         trick_public = (
-            self.current_trick.to_public(
+            trick_source.to_public(
                 viewer_id=me_id,
                 discard_visibility=self.config.discard_visibility,
             )
-            if self.current_trick
+            if trick_source
             else None
         )
         discard_cards = list(self.discard_pile) if self.config.discard_visibility == "open" else []
         hands = self.hands.get(me_id)
         hand_counts = {pid: len(hand) for pid, hand in self.hands.items()}
+        board_state: Optional[BoardState] = None
+        if trick_public and trick_public.plays:
+            leader_play = next((play for play in trick_public.plays if play.outcome in ("lead", "beat")), trick_public.plays[0])
+            defender_play = None
+            if trick_public.plays and len(trick_public.plays) > 1:
+                defender_play = next((play for play in trick_public.plays if play is not leader_play), None)
+            attacker_cards = leader_play.cards if leader_play else []
+            defender_cards = defender_play.cards if defender_play else []
+            board_state = BoardState(
+                attacker=[BoardCard(card_id=card.card_id, face_up=card.face_up) for card in attacker_cards],
+                defender=[BoardCard(card_id=card.card_id, face_up=card.face_up) for card in defender_cards],
+                reveal_until_ts=self.reveal_until_ts if reveal_active else None,
+            )
+        active_player_id = self.current_player_id() if self.round_active else None
+        table_players = []
+        now_ts = time.time()
+        for player in self.players:
+            is_active = active_player_id == player.id and self.turn_deadline and not reveal_active
+            remaining = None
+            if is_active and self.turn_deadline:
+                remaining = max(0, int(self.turn_deadline - now_ts))
+            table_players.append(
+                PlayerClock(
+                    player_id=player.id,
+                    name=player.name,
+                    turn_timer_sec=remaining,
+                    is_active=is_active,
+                )
+            )
+        cards_catalog = list(self.card_catalog.values())
+        cards_catalog.sort(key=lambda c: c.id)
         return GameState(
             room_id=self.id,
             room_name=self.name,
@@ -549,6 +714,10 @@ class Room:
             winners=list(self.winners),
             losers=list(self.losers),
             last_trick_winner_id=self.last_trick_winner_id,
+            player_totals=self._collect_player_totals(),
+            cards=cards_catalog,
+            board=board_state,
+            tablePlayers=table_players,
         )
 
 

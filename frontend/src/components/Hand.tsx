@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { Card, TrickState, Suit } from '../types'
+import type { Card, PublicCard, TrickState, Suit } from '../types'
 import CardView from './CardView'
 
 type DragPreview = { cards: Card[]; valid: boolean }
@@ -139,8 +139,30 @@ function suggestLeaderBest(cards: Card[]): number[] | null {
   return best ? [...best].sort((a, b) => a - b) : null
 }
 
-function isVisibleCard(card: { hidden?: boolean }): card is Card {
-  return !("hidden" in card && card.hidden)
+function isValidFourCombo(cards: Card[]): boolean {
+  if (cards.length !== 4) return false
+  const suitSet = new Set(cards.map(card => card.suit))
+  if (suitSet.size === 1) return true
+  const counts = cards.reduce<Map<number, number>>((map, card) => {
+    map.set(card.rank, (map.get(card.rank) ?? 0) + 1)
+    return map
+  }, new Map<number, number>())
+  if (counts.size === 1) return true
+  const tens = counts.get(10) ?? 0
+  if (Array.from(counts.entries()).some(([rank, count]) => rank !== 10 && count === 3) && tens >= 1) {
+    return true
+  }
+  if (Array.from(counts.entries()).some(([rank, count]) => rank !== 10 && count === 2) && tens >= 2) {
+    return true
+  }
+  if ((counts.get(14) ?? 0) === 1 && tens === 3) {
+    return true
+  }
+  return false
+}
+
+function isVisibleCard(card: PublicCard): card is PublicCard & { suit: Suit; rank: number } {
+  return Boolean(card.faceUp && card.suit && card.rank)
 }
 
 export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay, onDragPreview, meId }: Props) {
@@ -158,7 +180,15 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
     if (!trick) return [] as Card[]
     const ownerPlay = trick.plays.find(play => play.owner)
     if (!ownerPlay) return [] as Card[]
-    return ownerPlay.cards.filter(isVisibleCard)
+    return ownerPlay.cards
+      .filter(isVisibleCard)
+      .map(card => ({
+        id: card.cardId,
+        suit: card.suit,
+        rank: card.rank,
+        color: card.color,
+        imageUrl: card.imageUrl,
+      }))
   }, [trick])
 
   useEffect(() => {
@@ -197,13 +227,19 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
     if (picks.length === 0) {
       return {
         countValid: false,
-        message: leaderMode ? 'Выберите до трёх карт одной масти' : `Нужно положить ровно ${requiredCount} карт`,
+        message: leaderMode ? 'Выберите до четырёх карт (по правилам)' : `Нужно положить ровно ${requiredCount} карт`,
       }
     }
-    if (picks.length > 3) {
-      return { countValid: false, message: 'Нельзя выбрать больше трёх карт' }
+    if (picks.length > 4) {
+      return { countValid: false, message: 'Нельзя выбрать больше четырёх карт' }
     }
     if (leaderMode) {
+      if (picks.length === 4) {
+        if (!isValidFourCombo(picks)) {
+          return { countValid: false, message: 'Четыре карты должны образовывать допустимую комбинацию' }
+        }
+        return { countValid: true, message: 'Вы кладёте 4 карты' }
+      }
       const suits = new Set(picks.map(card => card.suit))
       if (suits.size > 1) {
         return { countValid: false, message: 'Для лидера все карты должны быть одной масти' }
@@ -232,7 +268,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
       if (!leaderMode && requiredCount && prev.length >= requiredCount) {
         return [index]
       }
-      if (leaderMode && prev.length >= 3) {
+      if (leaderMode && prev.length >= 4) {
         return [index]
       }
       return [...prev, index].sort((a, b) => a - b)
@@ -357,7 +393,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
       <div className="hand-header">
         <div className="hand-hint">
           {leaderMode
-            ? 'Вы лидер: выберите до трёх карт одной масти'
+            ? 'Вы лидер: выберите до четырёх карт (по правилам)'
             : `Ответьте набором из ${requiredCount} карт`}
         </div>
         <div className="hand-meta">
@@ -376,7 +412,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
           const incompatible = Boolean(selectionSuit && card.suit !== selectionSuit)
           return (
             <button
-              key={`${card.suit}${card.rank}-${index}`}
+              key={`${card.id}-${index}`}
               type="button"
               ref={el => {
                 buttonsRef.current[index] = el
@@ -390,7 +426,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
               onPointerDown={event => handlePointerDown(index, event)}
               onPointerUp={event => handlePointerUp(index, event)}
             >
-              <CardView card={card} />
+              <CardView cardId={card.id} faceUp asset={card} />
             </button>
           )
         })}
