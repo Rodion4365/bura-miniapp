@@ -1,22 +1,91 @@
 from __future__ import annotations
 from typing import Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 Suit = Literal["♠","♥","♦","♣"]
+
+SUIT_COLOR: Dict[Suit, Literal["red", "black"]] = {
+    "♠": "black",
+    "♣": "black",
+    "♥": "red",
+    "♦": "red",
+}
+
+RANK_IMAGE_CODES: Dict[int, str] = {
+    6: "6",
+    7: "7",
+    8: "8",
+    9: "9",
+    10: "0",
+    11: "J",
+    12: "Q",
+    13: "K",
+    14: "A",
+}
+
+SUIT_IMAGE_CODES: Dict[Suit, str] = {
+    "♠": "S",
+    "♣": "C",
+    "♥": "H",
+    "♦": "D",
+}
+
+
+def _image_url(suit: Suit, rank: int) -> Optional[str]:
+    suit_code = SUIT_IMAGE_CODES.get(suit)
+    rank_code = RANK_IMAGE_CODES.get(rank)
+    if not suit_code or not rank_code:
+        return None
+    return f"https://deckofcardsapi.com/static/img/{rank_code}{suit_code}.png"
+
 
 class Card(BaseModel):
     suit: Suit
     rank: int  # 6..14 (11=J,12=Q,13=K,14=A)
+    color: Optional[Literal["red", "black"]] = None
+    image: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def fill_defaults(cls, value):
+        if isinstance(value, dict):
+            suit = value.get("suit")
+            rank = value.get("rank")
+            if suit in SUIT_COLOR and value.get("color") is None:
+                value = {**value, "color": SUIT_COLOR[suit]}
+            if suit in SUIT_IMAGE_CODES and isinstance(rank, int) and value.get("image") is None:
+                image = _image_url(suit, rank)
+                if image:
+                    value = {**value, "image": image}
+        return value
 
 
 class PublicCard(BaseModel):
     suit: Optional[Suit] = None
     rank: Optional[int] = None
     hidden: bool = False
+    color: Optional[Literal["red", "black"]] = None
+    image: Optional[str] = None
 
     @classmethod
     def hidden_card(cls) -> "PublicCard":
         return cls(hidden=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def fill_defaults(cls, value):
+        if isinstance(value, dict):
+            if value.get("hidden"):
+                return value
+            suit = value.get("suit")
+            rank = value.get("rank")
+            if suit in SUIT_COLOR and value.get("color") is None:
+                value = {**value, "color": SUIT_COLOR[suit]}
+            if suit in SUIT_IMAGE_CODES and isinstance(rank, int) and value.get("image") is None:
+                image = _image_url(suit, rank)
+                if image:
+                    value = {**value, "image": image}
+        return value
 
 class Player(BaseModel):
     id: str
@@ -78,6 +147,13 @@ class Announcement(BaseModel):
     combo: Literal["bura", "molodka", "moscow", "four_ends"]
     cards: List[Card]
 
+class PlayerTotals(BaseModel):
+    player_id: str
+    name: str
+    score: int
+    points: int
+
+
 class GameState(BaseModel):
     room_id: str
     room_name: str
@@ -108,5 +184,6 @@ class GameState(BaseModel):
     winners: List[str] = Field(default_factory=list)
     losers: List[str] = Field(default_factory=list)
     last_trick_winner_id: Optional[str] = None
+    player_totals: List[PlayerTotals] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
