@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import type { Card, GameState, Player, PublicCard, TrickPlay } from '../types'
+import type { Card, CardColor, GameState, Player, Suit, TrickState } from '../types'
 import CardView from './CardView'
 
 type DragPreview = { cards: Card[]; valid: boolean } | null
@@ -7,12 +7,29 @@ type DragPreview = { cards: Card[]; valid: boolean } | null
 type Props = {
   state: GameState
   meId?: string
-  turnSecondsLeft?: number
   dragPreview?: DragPreview
   onDropPlay: (cards: Card[]) => void
+  cardAssets: Map<string, Card>
+  fallbackTimer?: number
 }
 
-const MAX_PER_ROW = 4
+type BoardEntry = {
+  cardId: string
+  faceUp: boolean
+  suit?: Suit
+  rank?: number
+  color?: CardColor
+  imageUrl?: string
+  backImageUrl?: string
+}
+
+type BoardSnapshot = {
+  attacker: BoardEntry[]
+  defender: BoardEntry[]
+  revealUntilTs?: number
+}
+
+const MAX_PREVIEW = 4
 
 function sortPlayers(players: Player[], meId?: string): Player[] {
   if (!players.length) return []
@@ -23,33 +40,63 @@ function sortPlayers(players: Player[], meId?: string): Player[] {
   return ordered.slice(myIndex).concat(ordered.slice(0, myIndex))
 }
 
-function chunkColumns<T>(items: T[], size: number): T[][] {
-  if (items.length === 0) return []
-  const result: T[][] = []
-  for (let i = 0; i < items.length; i += size) {
-    result.push(items.slice(i, i + size))
+function resolveBoardFromTrick(trick?: TrickState): BoardSnapshot {
+  if (!trick || trick.plays.length === 0) {
+    return { attacker: [], defender: [] }
   }
-  return result
+  const leaderPlay = trick.plays.find(play => play.outcome === 'lead') ?? trick.plays[0]
+  const defenderPlay = trick.plays.find(play => play !== leaderPlay)
+  const attacker = (leaderPlay?.cards ?? []).map(card => ({
+    cardId: card.cardId,
+    faceUp: card.faceUp,
+    suit: card.suit,
+    rank: card.rank,
+    color: card.color,
+    imageUrl: card.imageUrl,
+  }))
+  const defender = (defenderPlay?.cards ?? []).map(card => ({
+    cardId: card.cardId,
+    faceUp: card.faceUp,
+    suit: card.suit,
+    rank: card.rank,
+    color: card.color,
+    imageUrl: card.imageUrl,
+  }))
+  return { attacker, defender }
 }
 
-function trumpLabel(card?: PublicCard): string {
-  if (!card || ('hidden' in card && card.hidden)) return '—'
-  const rankMap: Record<number, string> = { 11: 'В', 12: 'Д', 13: 'К', 14: 'Т' }
-  const rank = rankMap[(card as Card).rank] ?? (card as Card).rank
-  const suit = (card as Card).suit
-  return `${rank}${suit}`
+function pickBoard(state: GameState): BoardSnapshot {
+  if (state.board) {
+    return {
+      attacker: state.board.attacker.map(card => ({
+        cardId: card.cardId,
+        faceUp: card.faceUp,
+        suit: card.suit,
+        rank: card.rank,
+        color: card.color,
+        imageUrl: card.imageUrl,
+        backImageUrl: card.backImageUrl,
+      })),
+      defender: state.board.defender.map(card => ({
+        cardId: card.cardId,
+        faceUp: card.faceUp,
+        suit: card.suit,
+        rank: card.rank,
+        color: card.color,
+        imageUrl: card.imageUrl,
+        backImageUrl: card.backImageUrl,
+      })),
+      revealUntilTs: state.board.revealUntilTs,
+    }
+  }
+  return resolveBoardFromTrick(state.trick)
 }
 
-function buildPlaysMap(plays?: TrickPlay[]) {
-  const map = new Map<string, TrickPlay>()
-  plays?.forEach(play => map.set(play.player_id, play))
-  return map
-}
-
-export default function TableView({ state, meId, turnSecondsLeft, dragPreview, onDropPlay }: Props) {
+export default function TableView({ state, meId, dragPreview, onDropPlay, cardAssets, fallbackTimer }: Props) {
   const orderedPlayers = useMemo(() => sortPlayers(state.players, meId), [state.players, meId])
-  const playsMap = useMemo(() => buildPlaysMap(state.trick?.plays), [state.trick?.plays])
-  const dropActive = Boolean(dragPreview?.valid && state.turn_player_id === meId)
+  const board = useMemo(() => pickBoard(state), [state])
+  const activePlayerId = state.turn_player_id
+  const dropActive = Boolean(dragPreview?.valid && activePlayerId === meId)
 
   const handleDragOver: React.DragEventHandler<HTMLDivElement> = event => {
     if (dropActive) {
@@ -61,95 +108,101 @@ export default function TableView({ state, meId, turnSecondsLeft, dragPreview, o
   const handleDrop: React.DragEventHandler<HTMLDivElement> = event => {
     if (!dropActive || !dragPreview) return
     event.preventDefault()
-    onDropPlay(dragPreview.cards)
+    onDropPlay(dragPreview.cards.slice(0, MAX_PREVIEW))
   }
 
-  const leaderPlay = state.trick?.plays.find(play => play.player_id === state.trick?.leader_id)
-    ?? state.trick?.plays[0]
-  const defenderPlay = state.trick && state.players.length > 1
-    ? state.trick.plays.find(play => play.player_id !== leaderPlay?.player_id)
-    : undefined
-  const previewCards = dropActive ? dragPreview?.cards ?? [] : []
-  const totalSlots = Math.max(
-    state.trick?.required_count ?? 0,
-    leaderPlay?.cards.length ?? 0,
-    defenderPlay?.cards.length ?? 0,
-    previewCards.length,
-  )
-  const boardColumns = Array.from({ length: Math.max(totalSlots, previewCards.length, state.trick ? 0 : 0) }).map((_, index) => ({
-    attack: leaderPlay?.cards[index],
-    defense: defenderPlay?.cards[index],
-    preview: previewCards[index],
-  }))
-  const columnGroups = boardColumns.length ? chunkColumns(boardColumns, MAX_PER_ROW) : []
-  const isDuel = orderedPlayers.length <= 2
+  const previewCards = dropActive ? dragPreview?.cards.slice(0, MAX_PREVIEW) ?? [] : []
 
   return (
     <section className="game-table">
-      <div className="table-header">
+      <header className="table-header">
         <div className="table-meta-left">
           <span className="meta-chip">Раунд {state.round_number ?? 1}</span>
-          <span className="meta-chip">Козырь {trumpLabel(state.trump_card)}</span>
+          <span className="meta-chip">Козырь {state.trump_card ? state.trump_card.suit : '—'}</span>
           <span className="meta-chip">Осталось карт: {state.deck_count}</span>
         </div>
         <div className="table-meta-right">
-          {orderedPlayers.map(player => {
-            const isTurn = state.turn_player_id === player.id
-            return (
-              <div key={player.id} className={`table-player ${isTurn ? 'active' : ''}`}>
-                <span className="player-name">{player.name}</span>
-                {isTurn && typeof turnSecondsLeft === 'number' && (
-                  <span className="player-timer">{turnSecondsLeft}с</span>
-                )}
-              </div>
-            )
-          })}
+          <div className="players-list">
+            {orderedPlayers.map(player => {
+              const clock = state.tablePlayers?.find(entry => entry.playerId === player.id)
+              const timerValue = clock?.turnTimerSec ?? (clock?.isActive ? fallbackTimer : undefined)
+              return (
+                <div key={player.id} className={`table-player ${clock?.isActive ? 'active' : ''}`}>
+                  <span className="player-name">{player.name}</span>
+                  {clock?.isActive && typeof timerValue === 'number' && (
+                    <span className="player-timer">{timerValue}s</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      </header>
 
       <div
         className={`table-board ${dropActive ? 'drop-active' : ''}`}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {isDuel ? (
-          columnGroups.length ? (
-            columnGroups.map((group, groupIndex) => (
-              <div className="board-row" key={`group-${groupIndex}`}>
-                {group.map((column, index) => (
-                  <div className="board-slot" key={`slot-${groupIndex}-${index}`}>
-                    <div className="slot-top">
-                      {column.attack ? <CardView card={column.attack} /> : column.preview ? <CardView card={column.preview} /> : <div className="card-placeholder" />}
-                    </div>
-                    <div className="slot-bottom">
-                      {column.defense ? <CardView card={column.defense} /> : <div className="card-placeholder" />}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))
-          ) : (
-            <div className="board-empty">{state.trick ? 'Ожидание ответа' : 'Стол пуст'}</div>
-          )
-        ) : (
-          <div className="board-stack">
-            {orderedPlayers.map(player => {
-              const play = playsMap.get(player.id)
+        <div className="lane attacker">
+          {board.attacker.map(card => {
+            const asset = cardAssets.get(card.cardId) ?? {
+              id: card.cardId,
+              suit: card.suit,
+              rank: card.rank,
+              color: card.color,
+              imageUrl: card.imageUrl,
+              backImageUrl: card.backImageUrl,
+            }
+            return (
+              <CardView
+                key={`attack-${card.cardId}`}
+                cardId={card.cardId}
+                faceUp={card.faceUp}
+                asset={asset}
+                imageUrl={card.imageUrl}
+                backImageUrl={card.backImageUrl}
+              />
+            )
+          })}
+          {previewCards.map(card => (
+            <CardView key={`preview-${card.id}`} cardId={card.id} faceUp asset={card} muted />
+          ))}
+        </div>
+
+        {board.defender.length > 0 && (
+          <div className="lane defender">
+            {board.defender.map(card => {
+              const asset = cardAssets.get(card.cardId) ?? {
+                id: card.cardId,
+                suit: card.suit,
+                rank: card.rank,
+                color: card.color,
+                imageUrl: card.imageUrl,
+                backImageUrl: card.backImageUrl,
+              }
               return (
-                <div key={player.id} className="stack-row">
-                  <span className="stack-name">{player.name}</span>
-                  <div className="stack-cards">
-                    {(play?.cards ?? []).map((card, idx) => (
-                      <CardView key={`${player.id}-${idx}`} card={card} />
-                    ))}
-                  </div>
-                </div>
+                <CardView
+                  key={`defend-${card.cardId}`}
+                  cardId={card.cardId}
+                  faceUp={card.faceUp}
+                  asset={asset}
+                  imageUrl={card.imageUrl}
+                  backImageUrl={card.backImageUrl}
+                />
               )
             })}
           </div>
         )}
+
         {dropActive && <div className="drop-hint">Отпустите карты, чтобы сыграть</div>}
       </div>
+
+      {board.revealUntilTs && (
+        <div className="reveal-indicator">
+          Смена хода через {Math.max(0, Math.ceil((board.revealUntilTs * 1000 - Date.now()) / 1000))}с
+        </div>
+      )}
     </section>
   )
 }

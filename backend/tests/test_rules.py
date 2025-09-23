@@ -1,5 +1,9 @@
+import time
+
+import pytest
+
 from game import Room, VARIANTS
-from models import Player, Card
+from models import Card, Player
 
 
 def make_room(two_players: bool = True) -> Room:
@@ -52,6 +56,83 @@ def test_partial_response_keeps_owner():
     assert room.last_trick_winner_id == "A"
     assert room.taken_cards["A"] and len(room.taken_cards["A"]) == 4
 
+
+def test_leader_can_throw_four_combo():
+    room = make_room()
+    room.hands["A"] = [
+        Card(suit="♠", rank=14),
+        Card(suit="♥", rank=14),
+        Card(suit="♦", rank=14),
+        Card(suit="♣", rank=14),
+    ]
+    room.hands["B"] = [
+        Card(suit="♠", rank=9),
+        Card(suit="♥", rank=9),
+        Card(suit="♦", rank=9),
+        Card(suit="♣", rank=9),
+    ]
+
+    room.play_cards("A", list(room.hands["A"]))
+    assert room.current_trick is not None
+    assert room.current_trick.required_count == 4
+
+
+def test_invalid_four_combo_rejected():
+    room = make_room()
+    room.hands["A"] = [
+        Card(suit="♠", rank=14),
+        Card(suit="♥", rank=13),
+        Card(suit="♦", rank=12),
+        Card(suit="♣", rank=11),
+    ]
+    room.hands["B"] = [
+        Card(suit="♠", rank=9),
+        Card(suit="♥", rank=9),
+        Card(suit="♦", rank=9),
+        Card(suit="♣", rank=9),
+    ]
+
+    with pytest.raises(ValueError):
+        room.play_cards("A", list(room.hands["A"]))
+
+
+def test_reveal_delay_keeps_board_visible():
+    room = make_room()
+    room.hands["A"] = [Card(suit="♠", rank=14), Card(suit="♠", rank=13)]
+    room.hands["B"] = [Card(suit="♣", rank=10), Card(suit="♣", rank=9)]
+
+    room.play_cards("A", list(room.hands["A"]))
+    room.play_cards("B", list(room.hands["B"]))
+
+    assert room.reveal_until_ts is not None
+    state = room.to_state("A")
+    assert state.board is not None
+    assert state.board.reveal_until_ts is not None
+
+    room.reveal_until_ts = time.time() - 1
+    room.to_state("A")
+    assert room.reveal_snapshot is None
+
+
+def test_board_state_includes_card_metadata():
+    room = make_room()
+    room.hands["A"] = [Card(suit="♠", rank=14), Card(suit="♠", rank=13)]
+    room.hands["B"] = [Card(suit="♣", rank=10), Card(suit="♣", rank=9)]
+
+    room.play_cards("A", [Card(suit="♠", rank=14)])
+    room.play_cards("B", [Card(suit="♣", rank=10)])
+
+    state = room.to_state("A")
+    assert state.board is not None
+    assert state.cards
+    assert state.board.attacker
+    card = state.board.attacker[0]
+    assert card.suit == "♠"
+    assert card.rank == 14
+    assert card.image_url and card.image_url.endswith(".png")
+    assert card.back_image_url and card.back_image_url.endswith(".png")
+
+
 def test_penalties_and_round_summary():
     room = make_room()
     room.taken_cards = {
@@ -88,8 +169,5 @@ def test_declare_combination():
     assert all(card.suit == "♣" for card in room.announcements[0].cards)
 
     # cannot declare twice
-    try:
+    with pytest.raises(ValueError):
         room.declare_combination("A", "bura")
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
