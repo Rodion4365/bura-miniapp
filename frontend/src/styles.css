@@ -24,12 +24,6 @@ html { font-size: var(--app-base-font); }
 body { margin: 0; min-height: var(--app-vh-stable, 100vh); }
 .app { padding: 0.75rem; }
 .row { display: flex; gap: 8px; align-items: center; }
-.hand { display: flex; gap: 6px; flex-wrap: wrap; }
-.table { display: flex; gap: 8px; padding: 8px; min-height: 100px; border: 1px dashed #ccc; border-radius: 12px; }
-.badge { padding: 2px 8px; border-radius: 999px; background: #eee; }
-.button { padding: 8px 12px; border: none; border-radius: 10px; background: black; color: white; cursor: pointer; }
-.button.secondary { background: #444; }
-.grid { display: grid; gap: 12px; }
 
 /* BURA TABS START */
 .tabs{display:flex;gap:8px;margin-top:8px}
@@ -242,90 +236,6 @@ body, .app{
 .pc-center img{ max-width:60px; width:72%; object-fit:contain; filter:drop-shadow(0 4px 6px rgba(0,0,0,.18)); }
 .pc-symbol{ font-size:calc(var(--font-3xl) * 0.9); line-height:1; }
 .pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; border:1px solid var(--border); background:var(--card); font-size:var(--font-2xs); font-weight:600; }
-/* ===== Hand ===== */
-.hand{ display:grid; gap:12px; padding:12px; border:1px solid var(--border); border-radius:16px; background:var(--card); }
-.hand.deal-anim .hand-card{ animation: deal .35s ease both; }
-.hand-hint{ font-size:var(--font-2xs); color:var(--muted); }
-.hand-cards{ display:flex; flex-wrap:wrap; gap:8px; }
-.hand-card{ border:none; background:none; padding:0; cursor:pointer; position:relative; }
-.hand-card.selected::after{
-  content:'';
-  position:absolute; inset:-4px;
-  border-radius:12px;
-  border:2px solid var(--primary);
-  box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
-}
-.hand-card:disabled{ opacity:.5; cursor:not-allowed; }
-.hand-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.chip{ padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:var(--font-2xs); }
-.chip:disabled{ opacity:.5; cursor:not-allowed; }
-
-@keyframes deal{
-  from{ transform: translateY(8px); opacity: .0; }
-  to  { transform: none; opacity: 1; }
-}
-
-/* ===== Game room ===== */
-.game-page{ display:flex; flex-direction:column; gap:12px; padding:12px; }
-.game-settings{ display:flex; flex-direction:column; gap:10px; border:1px solid var(--border); border-radius:16px; padding:12px; background:var(--card); box-shadow:0 6px 20px rgba(0,0,0,.08); }
-.settings-head{ display:flex; flex-direction:column; gap:2px; }
-.settings-title{ font-size:var(--font-xl); font-weight:800; }
-.settings-sub{ font-size:var(--font-2xs); color:var(--muted); }
-.settings-pills{ display:flex; flex-wrap:wrap; gap:8px; }
-.meta-chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); font-size:var(--font-2xs); font-weight:600; }
-.game-settings .controls{ padding-top:4px; }
-
-.game-table{ display:grid; gap:12px; padding:12px; border:1px solid var(--border); border-radius:18px; background:var(--card); box-shadow:0 10px 24px rgba(0,0,0,.12); }
-.table-header{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; justify-content:space-between; }
-.table-meta-left{ display:flex; flex-wrap:wrap; gap:8px; }
-.table-meta-right{ display:flex; flex-wrap:wrap; gap:12px; justify-content:flex-end; margin-left:auto; }
-.table-player{ display:inline-flex; align-items:center; gap:8px; font-size:var(--font-sm); color:var(--muted); font-weight:600; }
-.table-player.active{ color:var(--fg); }
-.player-timer{ padding:2px 8px; border-radius:8px; border:1px solid var(--border); font-size:var(--font-2xs); background:color-mix(in srgb, var(--primary) 12%, var(--card)); }
-
-.table-board{ position:relative; display:flex; flex-direction:column; gap:14px; border:1px dashed var(--border); border-radius:16px; padding:16px 12px; min-height:140px; background:color-mix(in srgb, var(--card) 85%, transparent); transition:border-color .2s ease, background .2s ease; }
-.table-board.drop-active{ border-color:color-mix(in srgb, var(--primary) 35%, var(--border)); background:color-mix(in srgb, var(--primary) 10%, var(--card)); }
-.board-row{ display:flex; gap:12px; justify-content:center; }
-.board-slot{ display:flex; flex-direction:column; gap:10px; align-items:center; }
-.slot-top,.slot-bottom{ min-height:var(--card-height); display:flex; align-items:center; justify-content:center; }
-.card-placeholder{ width:var(--card-width); height:var(--card-height); border-radius:12px; border:1px dashed var(--border); opacity:.4; }
-.board-empty{ text-align:center; color:var(--muted); font-size:var(--font-sm); padding:12px 0; }
-.board-stack{ display:grid; gap:8px; }
-.stack-row{ display:flex; gap:10px; align-items:center; }
-.stack-name{ min-width:72px; font-weight:600; font-size:var(--font-xs); color:var(--muted); }
-.stack-cards{ display:flex; gap:6px; flex-wrap:wrap; }
-.drop-hint{ position:absolute; left:12px; right:12px; bottom:8px; text-align:center; font-size:var(--font-2xs); color:var(--muted); }
-
-.hand-wrap{ border:1px solid var(--border); border-radius:16px; padding:12px; background:var(--card); display:grid; gap:8px; box-shadow:0 6px 20px rgba(0,0,0,.08); }
-.hand-title{ margin:0; font-size:var(--font-lg); font-weight:700; }
-
-.scoreboard{ border:1px solid var(--border); border-radius:16px; background:var(--card); box-shadow:0 6px 20px rgba(0,0,0,.08); overflow:hidden; }
-.scoreboard table{ width:100%; border-collapse:collapse; font-size:var(--font-sm); }
-.scoreboard th, .scoreboard td{ padding:10px 12px; border-bottom:1px solid var(--border); text-align:center; }
-.scoreboard th:first-child, .scoreboard td:first-child{ text-align:left; font-weight:700; }
-.scoreboard th{ background:color-mix(in srgb, var(--card) 85%, transparent); color:var(--muted); font-size:var(--font-2xs); text-transform:uppercase; letter-spacing:0.05em; }
-.scoreboard tr:last-child td{ border-bottom:0; }
-
-/* ===== Hand ===== */
-.hand{display:grid;gap:12px;padding:12px;border:1px solid var(--border);border-radius:18px;background:var(--card);outline:none;transition:box-shadow .2s ease}
-.hand.dragging{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 25%, transparent)}
-.hand-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
-.hand-hint{font-weight:700;font-size:var(--font-sm)}
-.hand-meta{display:flex;gap:8px;flex-wrap:wrap}
-.hand-feedback{font-size:var(--font-xs);color:var(--muted);min-height:18px}
-.hand-feedback.error{color:#d33;animation:shake .18s linear 2}
-@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
-.hand-cards{display:flex;flex-wrap:wrap;gap:10px}
-.hand-card{border:none;background:transparent;padding:0;cursor:pointer;position:relative;transition:transform .15s ease}
-.hand-card.selected{transform:translateY(-8px)}
-.hand-card.incompatible{opacity:.4}
-.hand-card:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
-.hand-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
-
-.card.hidden{background:repeating-linear-gradient(45deg,rgba(0,0,0,.08),rgba(0,0,0,.08) 6px,rgba(0,0,0,0) 6px,rgba(0,0,0,0) 12px);color:var(--muted)}
-.card.muted{opacity:.7}
-.card.red .card-rank,.card.red .card-suit{color:#c23838}
-
 /* ===== Game layout (mobile table v2) ===== */
 .game-page {
   display: flex;
@@ -540,16 +450,54 @@ body, .app{
 
 .hand {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  outline: none;
+  transition: box-shadow 0.2s ease;
+}
+
+.hand.deal-anim .hand-card {
+  animation: deal 0.35s ease both;
+}
+
+.hand.dragging {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
 .hand-header {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hand-hint {
   font-size: var(--font-2xs);
   color: var(--muted);
+  font-weight: 600;
+}
+
+.hand-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--font-2xs);
+  color: var(--muted);
+}
+
+.hand-feedback {
+  font-size: var(--font-xs);
+  color: var(--muted);
+  min-height: 18px;
+}
+
+.hand-feedback.error {
+  color: #d33;
+  animation: shake 0.18s linear 2;
 }
 
 .hand-cards {
@@ -576,10 +524,51 @@ body, .app{
   opacity: 0.4;
 }
 
+.hand-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
 .hand-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: var(--font-2xs);
+  cursor: pointer;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes deal {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
 }
 
 .scoreboard {
