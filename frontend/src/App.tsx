@@ -9,6 +9,7 @@ import Hand from './components/Hand'
 import { getState, verify } from './api'
 import type { GameState, Card } from './types'
 import { applyThemeOnce, watchTelegramTheme } from './theme'
+import { initViewportSizing } from './viewport'
 import { createRoomChannel, type RoomChannel } from './room-channel'
 import GameRules from './components/GameRules'
 
@@ -32,6 +33,10 @@ export default function App(){
   useEffect(() => {
     applyThemeOnce()
     watchTelegramTheme()
+    const disposeViewport = initViewportSizing()
+    return () => {
+      disposeViewport?.()
+    }
   }, [])
 
   // Telegram auth (с безопасным фолбэком)
