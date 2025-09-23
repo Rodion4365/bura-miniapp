@@ -13,6 +13,7 @@ from models import (
     GameVariant,
     Player,
     PublicCard,
+    PlayerTotals,
     TableConfig,
     TrickPlay,
     TrickState,
@@ -20,6 +21,8 @@ from models import (
 
 SUITS = ["♠", "♥", "♦", "♣"]
 RANKS = [6, 7, 8, 9, 10, 11, 12, 13, 14]
+RANK_IMAGE_CODES = {6: "6", 7: "7", 8: "8", 9: "9", 10: "0", 11: "J", 12: "Q", 13: "K", 14: "A"}
+SUIT_IMAGE_CODES = {"♠": "S", "♣": "C", "♦": "D", "♥": "H"}
 
 CARD_POINTS: Dict[int, int] = {
     14: 11,  # Ace
@@ -39,8 +42,31 @@ COMBINATION_NAMES = {
 }
 
 
+def _card_color(suit: str) -> Literal["red", "black"]:
+    return "red" if suit in ("♥", "♦") else "black"
+
+
+def _card_image_url(suit: str, rank: int) -> Optional[str]:
+    suit_code = SUIT_IMAGE_CODES.get(suit)
+    rank_code = RANK_IMAGE_CODES.get(rank)
+    if not suit_code or not rank_code:
+        return None
+    return f"https://deckofcardsapi.com/static/img/{rank_code}{suit_code}.png"
+
+
 def _make_deck() -> List[Card]:
-    return [Card(suit=suit, rank=rank) for suit in SUITS for rank in RANKS]
+    deck: List[Card] = []
+    for suit in SUITS:
+        for rank in RANKS:
+            deck.append(
+                Card(
+                    suit=suit,
+                    rank=rank,
+                    color=_card_color(suit),
+                    image=_card_image_url(suit, rank),
+                )
+            )
+    return deck
 
 
 @dataclass
@@ -71,10 +97,19 @@ class _TrickInternal:
                 or play.outcome in ("lead", "beat")
                 or play.player_id == viewer_id
             )
-            public_cards = [
-                PublicCard(suit=card.suit, rank=card.rank) if show_cards else PublicCard.hidden_card()
-                for card in play.cards
-            ]
+            public_cards: List[PublicCard] = []
+            for card in play.cards:
+                if show_cards:
+                    public_cards.append(
+                        PublicCard(
+                            suit=card.suit,
+                            rank=card.rank,
+                            color=card.color,
+                            image=card.image,
+                        )
+                    )
+                else:
+                    public_cards.append(PublicCard.hidden_card())
             plays.append(
                 TrickPlay(
                     player_id=play.player_id,
@@ -131,6 +166,7 @@ class Room:
         self.losers: List[str] = []
 
         self.scores: Dict[str, int] = {}
+        self.game_wins: Dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Lobby management
@@ -147,6 +183,7 @@ class Room:
         self.players.append(p)
         self.hands.setdefault(p.id, [])
         self.scores.setdefault(p.id, 0)
+        self.game_wins.setdefault(p.id, 0)
 
     def remove_player(self, player_id: str):
         self.players = [p for p in self.players if p.id != player_id]
@@ -154,6 +191,7 @@ class Room:
         self.taken_cards.pop(player_id, None)
         self.scores.pop(player_id, None)
         self.declared_combos.pop(player_id, None)
+        self.game_wins.pop(player_id, None)
         if self.players:
             self.turn_idx %= len(self.players)
         else:
@@ -180,6 +218,7 @@ class Room:
         self.last_trick_winner_id = None
         self.dealer_idx = random.randrange(len(self.players))
         self.round_number = 0
+        self.game_wins = {p.id: 0 for p in self.players}
         self._start_new_round(initial=True)
 
     def _start_new_round(self, *, initial: bool):
@@ -297,22 +336,6 @@ class Room:
             pid: sum(CARD_POINTS.get(card.rank, 0) for card in cards)
             for pid, cards in self.taken_cards.items()
         }
-
-    def _finalize_round(self, penalties: Dict[str, int]):
-        for pid, value in penalties.items():
-            self.scores[pid] = self.scores.get(pid, 0) + value
-        self.round_active = False
-        self.current_trick = None
-        self.turn_deadline = None
-        self.match_over = any(score >= 12 for score in self.scores.values())
-        if self.match_over:
-            self.losers = [pid for pid, score in self.scores.items() if score >= 12]
-            self.winners = [pid for pid in self.scores.keys() if pid not in self.losers]
-            self.winner_id = self.winners[0] if len(self.winners) == 1 else None
-            self.started = False
-            return
-        self.winner_id = None
-        self._start_new_round(initial=False)
 
     # ------------------------------------------------------------------
     # Public API
@@ -482,14 +505,14 @@ class Room:
         if self._round_finished():
             points = self._calculate_round_result()
             self.round_summary = points
-            penalties = self._calculate_penalties(points)
-            self._finalize_round(penalties)
+            penalties, leaders = self._calculate_penalties(points)
+            self._finalize_round(penalties, leaders)
         else:
             self._refresh_deadline()
 
-    def _calculate_penalties(self, points: Dict[str, int]) -> Dict[str, int]:
+    def _calculate_penalties(self, points: Dict[str, int]) -> tuple[Dict[str, int], List[str]]:
         if not points:
-            return {p.id: 0 for p in self.players}
+            return ({p.id: 0 for p in self.players}, [])
         max_points = max(points.values()) if points else 0
         leaders = [pid for pid, value in points.items() if value == max_points]
         penalties: Dict[str, int] = {}
@@ -504,7 +527,41 @@ class Room:
                 penalties[pid] = 6
             else:
                 penalties[pid] = 4
-        return penalties
+        return penalties, leaders
+
+    def _finalize_round(self, penalties: Dict[str, int], leaders: List[str]):
+        for pid, value in penalties.items():
+            self.scores[pid] = self.scores.get(pid, 0) + value
+        for pid in leaders:
+            self.game_wins[pid] = self.game_wins.get(pid, 0) + 1
+        self.round_active = False
+        self.current_trick = None
+        self.turn_deadline = None
+        self.match_over = any(score >= 12 for score in self.scores.values())
+        if self.match_over:
+            self.losers = [pid for pid, score in self.scores.items() if score >= 12]
+            self.winners = [pid for pid in self.scores.keys() if pid not in self.losers]
+            self.winner_id = self.winners[0] if len(self.winners) == 1 else None
+            self.started = False
+            return
+        self.winner_id = None
+        self._start_new_round(initial=False)
+
+    def _collect_player_totals(self) -> List[PlayerTotals]:
+        totals: List[PlayerTotals] = []
+        for player in self.players:
+            pid = player.id
+            taken_cards = self.taken_cards.get(pid, [])
+            points = sum(CARD_POINTS.get(card.rank, 0) for card in taken_cards)
+            totals.append(
+                PlayerTotals(
+                    player_id=pid,
+                    name=player.name,
+                    score=self.game_wins.get(pid, 0),
+                    points=points,
+                )
+            )
+        return totals
 
     def to_state(self, me_id: Optional[str]) -> GameState:
         self._check_timeout()
@@ -549,6 +606,7 @@ class Room:
             winners=list(self.winners),
             losers=list(self.losers),
             last_trick_winner_id=self.last_trick_winner_id,
+            player_totals=self._collect_player_totals(),
         )
 
 

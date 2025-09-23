@@ -59,14 +59,17 @@ def test_penalties_and_round_summary():
         "B": [],
     }
     room.round_active = True
-    penalties = room._calculate_penalties(room._calculate_round_result())
-    room.round_summary = room._calculate_round_result()
-    room._finalize_round(penalties)
+    points = room._calculate_round_result()
+    penalties, leaders = room._calculate_penalties(points)
+    room.round_summary = points
+    room._finalize_round(penalties, leaders)
 
     assert room.scores["A"] == 0
     assert room.scores["B"] == 6
     assert room.round_summary["A"] == 21
     assert room.round_summary["B"] == 0
+    assert room.game_wins["A"] == 1
+    assert room.game_wins["B"] == 0
 
 
 def test_declare_combination():
