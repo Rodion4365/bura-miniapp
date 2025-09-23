@@ -194,11 +194,19 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                     kwargs["round_id"] = data["roundId"]
                 if "trickIndex" in data:
                     kwargs["trick_index"] = data["trickIndex"]
-                ROOMS[room_id].play_cards(data["player_id"], cards or [], **kwargs)
-                await broadcast_room(room_id)
+                try:
+                    ROOMS[room_id].play_cards(data["player_id"], cards or [], **kwargs)
+                except ValueError as exc:
+                    await ws.send_json({"type": "error", "error": str(exc)})
+                else:
+                    await broadcast_room(room_id)
             elif t == "declare":
-                ROOMS[room_id].declare_combination(data["player_id"], data["combo"])
-                await broadcast_room(room_id)
+                try:
+                    ROOMS[room_id].declare_combination(data["player_id"], data["combo"])
+                except ValueError as exc:
+                    await ws.send_json({"type": "error", "error": str(exc)})
+                else:
+                    await broadcast_room(room_id)
     except WebSocketDisconnect:
         await hub.disconnect(ws)
 
