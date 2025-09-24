@@ -381,7 +381,7 @@ class Room:
         self._check_timeout()
         if not self.round_active:
             raise ValueError("Round is not active")
-        if self.current_trick is not None:
+        if self.trick_index > 0 or self.current_trick is not None:
             raise ValueError("Cannot declare after trick has started")
         if combo_key not in COMBINATION_NAMES:
             raise ValueError("Unknown combination")
@@ -718,6 +718,7 @@ class Room:
             winner_id=self.winner_id,
             scores=self.scores,
             trick=trick_public,
+            trick_index=self.trick_index,
             discard_pile=discard_cards,
             discard_count=len(self.discard_pile),
             taken_counts={pid: len(cards) for pid, cards in self.taken_cards.items()},
