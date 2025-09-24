@@ -79,6 +79,26 @@ def test_leader_can_throw_four_combo():
     assert room.current_trick.required_count == 4
 
 
+def test_leader_can_throw_ace_and_tens_combo():
+    room = make_room()
+    room.hands["A"] = [
+        Card(suit="♠", rank=14),
+        Card(suit="♥", rank=10),
+        Card(suit="♦", rank=10),
+        Card(suit="♣", rank=10),
+    ]
+    room.hands["B"] = [
+        Card(suit="♠", rank=9),
+        Card(suit="♥", rank=9),
+        Card(suit="♦", rank=9),
+        Card(suit="♣", rank=9),
+    ]
+
+    room.play_cards("A", list(room.hands["A"]))
+    assert room.current_trick is not None
+    assert room.current_trick.required_count == 4
+
+
 def test_invalid_four_combo_rejected():
     room = make_room()
     room.hands["A"] = [
@@ -86,6 +106,25 @@ def test_invalid_four_combo_rejected():
         Card(suit="♥", rank=13),
         Card(suit="♦", rank=12),
         Card(suit="♣", rank=11),
+    ]
+    room.hands["B"] = [
+        Card(suit="♠", rank=9),
+        Card(suit="♥", rank=9),
+        Card(suit="♦", rank=9),
+        Card(suit="♣", rank=9),
+    ]
+
+    with pytest.raises(ValueError):
+        room.play_cards("A", list(room.hands["A"]))
+
+
+def test_four_of_a_kind_non_special_rejected():
+    room = make_room()
+    room.hands["A"] = [
+        Card(suit="♠", rank=13),
+        Card(suit="♥", rank=13),
+        Card(suit="♦", rank=13),
+        Card(suit="♣", rank=13),
     ]
     room.hands["B"] = [
         Card(suit="♠", rank=9),

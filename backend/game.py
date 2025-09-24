@@ -443,17 +443,14 @@ class Room:
             return True
         ranks = [card.rank for card in cards]
         rank_counts = Counter(ranks)
-        if len(rank_counts) == 1:
-            return True
         tens = rank_counts.get(10, 0)
-        # 3 одного ранга + 1 десятка
-        if any(count == 3 for rank, count in rank_counts.items() if rank != 10) and tens >= 1:
+        aces = rank_counts.get(14, 0)
+        other_ranks = set(rank_counts.keys()) - {10, 14}
+        if other_ranks:
+            return False
+        if tens == 4 or aces == 4:
             return True
-        # 2 одного ранга + 2 десятки
-        if any(count == 2 for rank, count in rank_counts.items() if rank != 10) and tens >= 2:
-            return True
-        # 1 туз + 3 десятки
-        if rank_counts.get(14, 0) == 1 and tens == 3:
+        if 0 < tens < 4 and 0 < aces < 4 and tens + aces == 4:
             return True
         return False
 
