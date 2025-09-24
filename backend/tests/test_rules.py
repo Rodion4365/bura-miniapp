@@ -1,5 +1,4 @@
 import time
-
 import pytest
 
 from game import Room, VARIANTS
@@ -212,6 +211,27 @@ def test_declare_combination():
     # cannot declare twice
     with pytest.raises(ValueError):
         room.declare_combination("A", "bura")
+
+
+def test_declare_after_first_trick_rejected():
+    room = make_room()
+    room.hands["A"] = [Card(suit="♠", rank=9)]
+    room.hands["B"] = [
+        Card(suit="♣", rank=14),
+        Card(suit="♣", rank=13),
+        Card(suit="♣", rank=12),
+        Card(suit="♣", rank=11),
+        Card(suit="♠", rank=6),
+    ]
+
+    room.play_cards("A", [Card(suit="♠", rank=9)])
+    room.play_cards("B", [Card(suit="♠", rank=6)])
+
+    assert room.trick_index == 1
+    assert room.current_trick is None
+
+    with pytest.raises(ValueError, match="Cannot declare after trick has started"):
+        room.declare_combination("B", "bura")
 
 
 def test_draw_up_from_deck_round_robin_distribution():

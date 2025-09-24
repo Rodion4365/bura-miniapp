@@ -246,6 +246,7 @@ class GameState(BaseModel):
     winner_id: Optional[str] = None
     scores: Dict[str, int] = Field(default_factory=dict)
     trick: Optional[TrickState] = None
+    trick_index: int = 0
     discard_pile: List[Card] = Field(default_factory=list)
     discard_count: int = 0
     taken_counts: Dict[str, int] = Field(default_factory=dict)

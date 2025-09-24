@@ -116,6 +116,7 @@ export type GameState = {
   winner_id?: string
   scores?: Record<string, number>
   trick?: TrickState
+  trick_index?: number
   discard_pile?: Card[]
   discard_count?: number
   taken_counts?: Record<string, number>

@@ -17,7 +17,8 @@ const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string; hint:
 export default function Controls({ state, onDeclare }: Props){
   const requiredPlayers = state?.config?.maxPlayers ?? state?.variant?.players_min ?? 2
   const canStart = !!state && !state.started && state.players.length >= requiredPlayers
-  const canDeclare = !!state?.started && !state?.trick && !state?.match_over
+  const trickIndex = state?.trick_index ?? 0
+  const canDeclare = !!state?.started && !state?.trick && !state?.match_over && trickIndex === 0
   const combos = COMBOS.filter(combo => combo.key !== 'four_ends' || state?.config?.enableFourEnds)
 
   return (
