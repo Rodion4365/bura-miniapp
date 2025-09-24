@@ -16,6 +16,8 @@ type Props = {
 }
 
 const RANK_ORDER = [6, 7, 8, 9, 10, 11, 12, 13, 14]
+const FOUR_CARD_RULE_HINT =
+  'Допустимая четвёрка: одна масть или комбинации тузов и десяток (туз + 3×10, 2 туза + 2×10, 3 туза + 10, четыре туза, четыре десятки)'
 
 function rankStrength(rank: number): number {
   return RANK_ORDER.indexOf(rank)
@@ -147,17 +149,12 @@ function isValidFourCombo(cards: Card[]): boolean {
     map.set(card.rank, (map.get(card.rank) ?? 0) + 1)
     return map
   }, new Map<number, number>())
-  if (counts.size === 1) return true
   const tens = counts.get(10) ?? 0
-  if (Array.from(counts.entries()).some(([rank, count]) => rank !== 10 && count === 3) && tens >= 1) {
-    return true
-  }
-  if (Array.from(counts.entries()).some(([rank, count]) => rank !== 10 && count === 2) && tens >= 2) {
-    return true
-  }
-  if ((counts.get(14) ?? 0) === 1 && tens === 3) {
-    return true
-  }
+  const aces = counts.get(14) ?? 0
+  const otherRanks = Array.from(counts.keys()).filter(rank => rank !== 10 && rank !== 14)
+  if (otherRanks.length > 0) return false
+  if (tens === 4 || aces === 4) return true
+  if (tens > 0 && aces > 0 && tens < 4 && aces < 4 && tens + aces === 4) return true
   return false
 }
 
@@ -227,7 +224,9 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
     if (picks.length === 0) {
       return {
         countValid: false,
-        message: leaderMode ? 'Выберите до четырёх карт (по правилам)' : `Нужно положить ровно ${requiredCount} карт`,
+        message: leaderMode
+          ? 'Выберите до трёх карт одной масти или допустимую четвёрку'
+          : `Нужно положить ровно ${requiredCount} карт`,
       }
     }
     if (picks.length > 4) {
@@ -236,13 +235,13 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
     if (leaderMode) {
       if (picks.length === 4) {
         if (!isValidFourCombo(picks)) {
-          return { countValid: false, message: 'Четыре карты должны образовывать допустимую комбинацию' }
+          return { countValid: false, message: `Недопустимая четвёрка. ${FOUR_CARD_RULE_HINT}` }
         }
-        return { countValid: true, message: 'Вы кладёте 4 карты' }
+        return { countValid: true, message: 'Вы кладёте допустимую четвёрку' }
       }
       const suits = new Set(picks.map(card => card.suit))
       if (suits.size > 1) {
-        return { countValid: false, message: 'Для лидера все карты должны быть одной масти' }
+        return { countValid: false, message: 'Для набора из 1–3 карт нужна одна масть' }
       }
       return { countValid: true, message: `Вы кладёте ${picks.length} карт` }
     }
@@ -393,7 +392,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
       <div className="hand-header">
         <div className="hand-hint">
           {leaderMode
-            ? 'Вы лидер: выберите до четырёх карт (по правилам)'
+            ? 'Вы лидер: сыграйте до трёх карт одной масти или допустимую четвёрку'
             : `Ответьте набором из ${requiredCount} карт`}
         </div>
         <div className="hand-meta">

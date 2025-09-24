@@ -1,5 +1,4 @@
 import time
-
 import pytest
 
 from game import Room, VARIANTS
@@ -9,16 +8,18 @@ from models import Card, Player
 def make_room(two_players: bool = True) -> Room:
     variant = VARIANTS["classic_2p"] if two_players else VARIANTS["classic_3p"]
     room = Room("r", "Test", variant)
-    room.add_player(Player(id="A", name="A"))
-    room.add_player(Player(id="B", name="B"))
+    player_ids = ["A", "B"]
+    if not two_players:
+        player_ids.append("C")
+    for pid in player_ids:
+        room.add_player(Player(id=pid, name=pid))
     room.start()
     # simplify deterministic state
     room.deck = []
     room.trump = "♣"
     room.trump_card = Card(suit="♣", rank=6)
-    room.hands["A"] = []
-    room.hands["B"] = []
-    room.taken_cards = {"A": [], "B": []}
+    room.hands = {pid: [] for pid in player_ids}
+    room.taken_cards = {pid: [] for pid in player_ids}
     room.discard_pile = []
     room.round_summary = {}
     room.turn_idx = 0
@@ -77,6 +78,26 @@ def test_leader_can_throw_four_combo():
     assert room.current_trick.required_count == 4
 
 
+def test_leader_can_throw_ace_and_tens_combo():
+    room = make_room()
+    room.hands["A"] = [
+        Card(suit="♠", rank=14),
+        Card(suit="♥", rank=10),
+        Card(suit="♦", rank=10),
+        Card(suit="♣", rank=10),
+    ]
+    room.hands["B"] = [
+        Card(suit="♠", rank=9),
+        Card(suit="♥", rank=9),
+        Card(suit="♦", rank=9),
+        Card(suit="♣", rank=9),
+    ]
+
+    room.play_cards("A", list(room.hands["A"]))
+    assert room.current_trick is not None
+    assert room.current_trick.required_count == 4
+
+
 def test_invalid_four_combo_rejected():
     room = make_room()
     room.hands["A"] = [
@@ -84,6 +105,25 @@ def test_invalid_four_combo_rejected():
         Card(suit="♥", rank=13),
         Card(suit="♦", rank=12),
         Card(suit="♣", rank=11),
+    ]
+    room.hands["B"] = [
+        Card(suit="♠", rank=9),
+        Card(suit="♥", rank=9),
+        Card(suit="♦", rank=9),
+        Card(suit="♣", rank=9),
+    ]
+
+    with pytest.raises(ValueError):
+        room.play_cards("A", list(room.hands["A"]))
+
+
+def test_four_of_a_kind_non_special_rejected():
+    room = make_room()
+    room.hands["A"] = [
+        Card(suit="♠", rank=13),
+        Card(suit="♥", rank=13),
+        Card(suit="♦", rank=13),
+        Card(suit="♣", rank=13),
     ]
     room.hands["B"] = [
         Card(suit="♠", rank=9),
@@ -192,3 +232,30 @@ def test_declare_after_first_trick_rejected():
 
     with pytest.raises(ValueError, match="Cannot declare after trick has started"):
         room.declare_combination("B", "bura")
+
+
+def test_draw_up_from_deck_round_robin_distribution():
+    room = make_room(two_players=False)
+    deck_cards = [
+        Card(suit="♠", rank=6),
+        Card(suit="♥", rank=7),
+        Card(suit="♦", rank=8),
+        Card(suit="♣", rank=9),
+        Card(suit="♠", rank=10),
+    ]
+    room.deck = list(deck_cards)
+    room.card_catalog = {card.id: card for card in deck_cards}
+    room.hands["A"] = []
+    room.hands["B"] = []
+    room.hands["C"] = []
+
+    room._draw_up_from_deck("B")
+
+    assert [card.id for card in room.hands["B"]] == [deck_cards[0].id, deck_cards[3].id]
+    assert [card.id for card in room.hands["C"]] == [deck_cards[1].id, deck_cards[4].id]
+    assert [card.id for card in room.hands["A"]] == [deck_cards[2].id]
+    assert room.deck == []
+
+    state = room.to_state("C")
+    assert state.hand_counts == {"A": 1, "B": 2, "C": 2}
+    assert state.deck_count == 0
