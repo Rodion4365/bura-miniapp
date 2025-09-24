@@ -360,10 +360,18 @@ class Room:
             return
         start_idx = self._player_index(winner_id)
         total_players = len(self.players)
-        for offset in range(total_players):
-            pid = self.players[(start_idx + offset) % total_players].id
-            while len(self.hands[pid]) < 4 and self.deck:
+        while self.deck:
+            drew_any = False
+            for offset in range(total_players):
+                if not self.deck:
+                    break
+                pid = self.players[(start_idx + offset) % total_players].id
+                if len(self.hands[pid]) >= 4:
+                    continue
                 self.hands[pid].append(self.deck.pop(0))
+                drew_any = True
+            if not drew_any:
+                break
 
     def _round_finished(self) -> bool:
         return all(len(hand) == 0 for hand in self.hands.values()) and not self.deck
