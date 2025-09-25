@@ -5,7 +5,7 @@ import json
 import uuid
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -101,15 +101,25 @@ async def join_game(
     await broadcast_lobby()
     return {"ok": True}
 
+
+def _get_room_or_404(room_id: str) -> Room:
+    room = ROOMS.get(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="room_not_found")
+    return room
+
+
 @app.post("/api/game/start/{room_id}")
 async def start_game(room_id: str):
-    ROOMS[room_id].start()
+    room = _get_room_or_404(room_id)
+    room.start()
     await broadcast_room(room_id)
     return {"ok": True}
 
+
 @app.get("/api/game/state/{room_id}")
 async def game_state(room_id: str, x_user_id: Optional[str] = Header(None)):
-    r = ROOMS[room_id]
+    r = _get_room_or_404(room_id)
     return r.to_state(x_user_id).model_dump(by_alias=True)
 
 # ---------- WebSockets hub ----------
@@ -178,12 +188,21 @@ async def broadcast_lobby():
 # ---------- WS endpoints ----------
 @app.websocket("/ws/{room_id}")
 async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
+    if room_id not in ROOMS:
+        await ws.close(code=1008, reason="room_not_found")
+        return
+
     await hub.connect_room(room_id, player_id, ws)
     try:
         await broadcast_room(room_id)
         while True:
             data = await ws.receive_json()
             t = data.get("type")
+            room = ROOMS.get(room_id)
+            if room is None:
+                await ws.close(code=1011, reason="room_not_found")
+                await hub.disconnect(ws)
+                break
             if t in {"play", "play_cards"}:
                 cards = data.get("cards")
                 card = data.get("card")
@@ -195,14 +214,14 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                 if "trickIndex" in data:
                     kwargs["trick_index"] = data["trickIndex"]
                 try:
-                    ROOMS[room_id].play_cards(data["player_id"], cards or [], **kwargs)
+                    room.play_cards(data["player_id"], cards or [], **kwargs)
                 except ValueError as exc:
                     await ws.send_json({"type": "error", "error": str(exc)})
                 else:
                     await broadcast_room(room_id)
             elif t == "declare":
                 try:
-                    ROOMS[room_id].declare_combination(data["player_id"], data["combo"])
+                    room.declare_combination(data["player_id"], data["combo"])
                 except ValueError as exc:
                     await ws.send_json({"type": "error", "error": str(exc)})
                 else:
