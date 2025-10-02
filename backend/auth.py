@@ -1,13 +1,18 @@
-import hmac, hashlib, os
-from urllib.parse import parse_qsl
+import hmac
+import hashlib
+import os
 from typing import Dict
+from urllib.parse import parse_qsl
+
 from dotenv import load_dotenv
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN","")
 
 def _get_secret_key() -> bytes:
-    return hashlib.sha256(("WebAppData"+BOT_TOKEN).encode()).digest()
+    """Return the Telegram secret key for validating init data."""
+
+    return hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
 
 def verify_init_data(init_data: str) -> Dict[str,str]:
     if not BOT_TOKEN:
