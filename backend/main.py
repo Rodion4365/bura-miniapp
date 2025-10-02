@@ -5,7 +5,15 @@ import json
 import uuid
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Query, HTTPException
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    Header,
+    Query,
+    HTTPException,
+    Form,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -52,7 +60,7 @@ async def rooms():
     return list_rooms_summary()
 
 @app.post("/api/auth/verify")
-async def auth_verify(init_data: str):
+async def auth_verify(init_data: str = Form(...)):
     data = verify_init_data(init_data)
     user = json.loads(data.get("user", "{}"))
     return VerifyResult(
