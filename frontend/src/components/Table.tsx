@@ -178,7 +178,7 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <div className="lane attacker">
+        <div className="lane cards-row attacker">
           {board.attacker.map(card => {
             const asset = cardAssets.get(card.cardId) ?? {
               id: card.cardId,
@@ -199,13 +199,17 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
               />
             )
           })}
-          {previewCards.map(card => (
-            <CardView key={`preview-${card.id}`} cardId={card.id} faceUp asset={card} muted />
-          ))}
+          {previewCards.length > 0 && (
+            <div className="lane-preview" aria-hidden="true">
+              {previewCards.map(card => (
+                <CardView key={`preview-${card.id}`} cardId={card.id} faceUp asset={card} muted />
+              ))}
+            </div>
+          )}
         </div>
 
         {board.defender.length > 0 && (
-          <div className="lane defender">
+          <div className="lane cards-row defender">
             {board.defender.map(card => {
               const asset = cardAssets.get(card.cardId) ?? {
                 id: card.cardId,

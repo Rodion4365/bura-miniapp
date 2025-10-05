@@ -396,7 +396,7 @@ export default function App(){
           />
 
           {state.hands && (
-            <section className="hand-wrap">
+            <section className="hand-wrap section-hand">
               <h4 className="hand-title">Твои карты</h4>
               <Hand
                 cards={state.hands}

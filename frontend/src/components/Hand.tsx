@@ -434,7 +434,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
         </div>
       </div>
       <div className={`hand-feedback ${error ? 'error' : ''}`}>{helperText}</div>
-      <div className="hand-cards">
+      <div className="hand-cards cards-row">
         {cards.map((card, index) => {
           const isSelected = selected.includes(index)
           const incompatible = Boolean(selectionSuit && card.suit !== selectionSuit)
