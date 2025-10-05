@@ -199,9 +199,13 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
               />
             )
           })}
-          {previewCards.map(card => (
-            <CardView key={`preview-${card.id}`} cardId={card.id} faceUp asset={card} muted />
-          ))}
+          {previewCards.length > 0 && (
+            <div className="lane-preview" aria-hidden="true">
+              {previewCards.map(card => (
+                <CardView key={`preview-${card.id}`} cardId={card.id} faceUp asset={card} muted />
+              ))}
+            </div>
+          )}
         </div>
 
         {board.defender.length > 0 && (
