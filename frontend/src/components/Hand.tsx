@@ -15,6 +15,8 @@ type Props = {
   meId?: string
   isLocked?: boolean
   lockReason?: string
+  canRequestEarlyTurn?: boolean
+  onRequestEarlyTurn?: (suit: Suit) => void
 }
 
 const RANK_ORDER = [6, 7, 8, 9, 10, 11, 12, 13, 14]
@@ -160,11 +162,33 @@ function isValidFourCombo(cards: Card[]): boolean {
   return false
 }
 
+function isValidEarlyTurnSelection(cards: Card[]): boolean {
+  if (cards.length !== 4) return false
+  const suitSet = new Set(cards.map(card => card.suit))
+  if (suitSet.size !== 1) return false
+  const aceCount = cards.filter(card => card.rank === 14).length
+  const highCount = cards.filter(card => card.rank === 14 || card.rank === 10).length
+  return aceCount >= 1 && highCount >= 3
+}
+
 function isVisibleCard(card: PublicCard): card is PublicCard & { suit: Suit; rank: number } {
   return Boolean(card.faceUp && card.suit && card.rank)
 }
 
-export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay, onDragPreview, meId, isLocked, lockReason }: Props) {
+export default function Hand({
+  cards,
+  trick,
+  trump,
+  isMyTurn,
+  playStamp,
+  onPlay,
+  onDragPreview,
+  meId,
+  isLocked,
+  lockReason,
+  canRequestEarlyTurn,
+  onRequestEarlyTurn,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
   const pointerRef = useRef<{ index: number; y: number } | null>(null)
@@ -172,6 +196,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [focusIndex, setFocusIndex] = useState(0)
+  const [awaitingEarlyTurn, setAwaitingEarlyTurn] = useState(false)
 
   const leaderMode = !trick || trick.plays.length === 0
   const requiredCount = leaderMode ? undefined : trick?.required_count
@@ -206,6 +231,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
     setSelected([])
     setDragging(false)
     setError(null)
+    setAwaitingEarlyTurn(false)
   }, [playStamp])
 
   useEffect(() => {
@@ -261,14 +287,27 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   const validation = useMemo(() => evaluateSelection(selected), [selected, leaderMode, requiredCount])
+  const canTriggerEarlyTurn = useMemo(() => {
+    if (awaitingEarlyTurn) return false
+    if (isMyTurn) return false
+    if (isLocked) return false
+    if (!leaderMode) return false
+    if (!canRequestEarlyTurn) return false
+    if (selectedCards.length !== 4) return false
+    return isValidEarlyTurnSelection(selectedCards)
+  }, [awaitingEarlyTurn, isMyTurn, isLocked, leaderMode, canRequestEarlyTurn, selectedCards])
   const lockMessage = lockReason ?? 'Ожидайте очистки стола'
-  const canSubmit = Boolean(isMyTurn && !isLocked && validation.countValid)
+  const canSubmit = Boolean(!isLocked && validation.countValid && (isMyTurn || canTriggerEarlyTurn))
   const helperText = useMemo(() => {
     if (isLocked) return lockMessage
-    if (!isMyTurn) return 'Ждём хода соперника'
+    if (!isMyTurn) {
+      if (awaitingEarlyTurn) return 'Запрошен досрочный ход…'
+      if (canTriggerEarlyTurn) return 'Можно запросить досрочный ход'
+      return 'Ждём хода соперника'
+    }
     if (error) return error
     return validation.message
-  }, [isLocked, lockMessage, isMyTurn, validation.message, error])
+  }, [isLocked, lockMessage, isMyTurn, validation.message, error, awaitingEarlyTurn, canTriggerEarlyTurn])
 
   function toggle(index: number) {
     if (isLocked) return
@@ -292,11 +331,25 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
       setError(lockMessage)
       return
     }
-    if (!canSubmit) {
-      setError(isMyTurn ? validation.message : 'Сейчас ход другого игрока')
+    if (selectedCards.length === 0) {
+      setError(validation.message)
       return
     }
-    if (selectedCards.length === 0) return
+    if (!isMyTurn) {
+      if (canTriggerEarlyTurn && selectedCards[0]) {
+        onRequestEarlyTurn?.(selectedCards[0].suit)
+        setAwaitingEarlyTurn(true)
+        setError('Запрошен досрочный ход…')
+      } else {
+        setError('Сейчас ход другого игрока')
+      }
+      return
+    }
+    if (!validation.countValid) {
+      setError(validation.message)
+      return
+    }
+    setAwaitingEarlyTurn(false)
     onDragPreview?.(null)
     onPlay([...selectedCards], meta)
   }
@@ -306,6 +359,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
     setSelected([])
     setError(null)
     onDragPreview?.(null)
+    setAwaitingEarlyTurn(false)
   }
 
   function applyHint(baseIndex?: number) {
@@ -407,6 +461,29 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
       handleClear()
     }
   }
+
+  useEffect(() => {
+    if (!awaitingEarlyTurn) return
+    if (selectedCards.length !== 4) {
+      setAwaitingEarlyTurn(false)
+      return
+    }
+    if (!isValidEarlyTurnSelection(selectedCards)) {
+      setAwaitingEarlyTurn(false)
+    }
+  }, [awaitingEarlyTurn, selectedCards])
+
+  useEffect(() => {
+    if (!awaitingEarlyTurn) return
+    if (!isMyTurn) return
+    if (isLocked) return
+    if (!leaderMode) return
+    if (!validation.countValid) return
+    if (selectedCards.length !== 4) return
+    onDragPreview?.(null)
+    onPlay([...selectedCards], { viaDrop: false })
+    setAwaitingEarlyTurn(false)
+  }, [awaitingEarlyTurn, isMyTurn, isLocked, leaderMode, validation.countValid, selectedCards, onPlay, onDragPreview])
 
   const selectionSuit = leaderMode && selected.length > 0 ? cards[selected[0]].suit : null
 

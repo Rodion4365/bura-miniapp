@@ -492,6 +492,8 @@ export default function App(){
                 onDragPreview={setDragPreview}
                 isLocked={countdownActive}
                 lockReason="Ожидайте очистки стола"
+                canRequestEarlyTurn={canRequestEarlyTurn}
+                onRequestEarlyTurn={handleRequestEarlyTurn}
               />
             </section>
           )}
