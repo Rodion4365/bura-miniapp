@@ -454,6 +454,37 @@ class Room:
             return True
         return False
 
+    def request_early_turn(self, player_id: str, suit: str, *, round_id: Optional[str] = None) -> List[Card]:
+        self._check_timeout()
+        self._check_reveal()
+        if self.reveal_until_ts is not None:
+            raise ValueError("Ожидайте завершения текущего розыгрыша")
+        if not self.started or not self.round_active:
+            raise ValueError("Round not active")
+        if round_id is not None and self.round_id is not None and round_id != self.round_id:
+            raise ValueError("Round mismatch")
+        if player_id == self.current_player_id():
+            raise ValueError("Already your turn")
+        if self.current_trick is not None:
+            raise ValueError("Cannot request during trick")
+        if suit not in SUITS:
+            raise ValueError("Unknown suit")
+        hand = self.hands.get(player_id)
+        if not hand:
+            raise ValueError("Hand not available")
+        same_suit = [card for card in hand if card.suit == suit]
+        if len(same_suit) != 4:
+            raise ValueError("Нужны ровно 4 карты выбранной масти")
+        aces = sum(1 for card in same_suit if card.rank == 14)
+        high_cards = sum(1 for card in same_suit if card.rank in (14, 10))
+        if aces < 1:
+            raise ValueError("В наборе должен быть хотя бы один туз")
+        if high_cards < 3:
+            raise ValueError("Требуются как минимум три туза или десятки")
+        self.turn_idx = self._player_index(player_id)
+        self._refresh_deadline()
+        return same_suit
+
     def play_cards(
         self,
         player_id: str,

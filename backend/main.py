@@ -173,6 +173,13 @@ class Hub:
             except RuntimeError:
                 pass
 
+    async def send_room_event(self, room_id: str, message: dict):
+        for ws in list(self.rooms.get(room_id, [])):
+            try:
+                await ws.send_json(message)
+            except RuntimeError:
+                pass
+
     async def send_lobby(self, message: dict):
         for ws in list(self.lobby):
             try:
@@ -233,6 +240,24 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                 except ValueError as exc:
                     await ws.send_json({"type": "error", "error": str(exc)})
                 else:
+                    await broadcast_room(room_id)
+            elif t == "request_early_turn":
+                suit = data.get("suit")
+                try:
+                    cards = room.request_early_turn(data["player_id"], suit, round_id=data.get("roundId"))
+                except ValueError as exc:
+                    await ws.send_json({"type": "error", "error": str(exc)})
+                else:
+                    await hub.send_room_event(
+                        room_id,
+                        {
+                            "type": "EARLY_TURN_GRANTED",
+                            "playerId": data["player_id"],
+                            "suit": suit,
+                            "cardIds": [card.id for card in cards],
+                            "ranks": [card.rank for card in cards],
+                        },
+                    )
                     await broadcast_room(room_id)
     except WebSocketDisconnect:
         await hub.disconnect(ws)

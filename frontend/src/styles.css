@@ -1,5 +1,6 @@
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: light;
   --app-scale: 1;
   --app-base-font: clamp(14px, 11px + 1.2vw, 18px);
   --font-3xs: calc(11px * var(--app-scale));
@@ -109,6 +110,7 @@ html[data-theme="dark"]{
   --border: #222733;
   --primary: #f3f3f3;
   --primary-fg: #0f1115;
+  color-scheme: dark;
 }
 
 body, .app{
@@ -292,8 +294,12 @@ body, .app{
 }
 .hand-card:disabled{ opacity:.5; cursor:not-allowed; }
 .hand-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.chip{ padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:var(--font-2xs); }
+.chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:var(--font-2xs); color:var(--fg); }
 .chip:disabled{ opacity:.5; cursor:not-allowed; }
+.chip .chip-suit{ font-weight:700; font-size:var(--font-sm); line-height:1; }
+.chip .chip-suit.red{ color:#d84c4c; }
+.chip .chip-suit.black{ color:var(--fg); }
+.chip .combo-cards{ font-weight:600; letter-spacing:.02em; }
 
 @keyframes deal{
   from{ transform: translateY(8px); opacity: .0; }

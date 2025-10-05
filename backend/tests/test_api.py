@@ -1,6 +1,8 @@
 import os, importlib
 from fastapi.testclient import TestClient
 
+from models import Card
+
 os.environ.setdefault("ORIGIN", "http://localhost:5173")
 app_mod = importlib.import_module("main")
 client = TestClient(app_mod.app)
@@ -89,3 +91,65 @@ def test_ws_invalid_action_returns_error_without_disconnect():
         ws.send_json({"type": "declare", "player_id": "userA", "combo": "unknown"})
         repeat_error = ws.receive_json()
         assert repeat_error["type"] == "error"
+
+
+def _make_card(suit: str, rank: int, idx: int) -> Card:
+    return Card(id=f"test_{suit}_{rank}_{idx}", suit=suit, rank=rank)
+
+
+def test_request_early_turn_via_ws():
+    headers_a = {"x-user-id": "userA", "x-user-name": "User A", "x-user-avatar": ""}
+    create_resp = client.post(
+        "/api/game/create",
+        json={"variant_key": "classic_2p", "room_name": "Early"},
+        headers=headers_a,
+    )
+    assert create_resp.status_code == 200
+    room_id = create_resp.json()["room_id"]
+
+    headers_b = {"x-user-id": "userB", "x-user-name": "User B", "x-user-avatar": ""}
+    join_resp = client.post("/api/game/join", json={"room_id": room_id}, headers=headers_b)
+    assert join_resp.status_code == 200
+
+    start_resp = client.post(f"/api/game/start/{room_id}")
+    assert start_resp.status_code == 200
+
+    room = app_mod.ROOMS[room_id]
+    room.hands["userA"] = [
+        _make_card("♥", 14, 1),
+        _make_card("♥", 14, 2),
+        _make_card("♥", 10, 1),
+        _make_card("♥", 9, 1),
+    ]
+    room.hands["userB"] = [
+        _make_card("♠", 6, 1),
+        _make_card("♠", 7, 1),
+        _make_card("♠", 8, 1),
+        _make_card("♠", 9, 2),
+    ]
+    room.turn_idx = room._player_index("userB")
+    room._refresh_deadline()
+
+    with client.websocket_connect(f"/ws/{room_id}?player_id=userA") as ws:
+        first_state = ws.receive_json()
+        assert first_state["type"] == "state"
+        assert first_state["payload"]["turn_player_id"] == "userB"
+
+        ws.send_json({"type": "request_early_turn", "player_id": "userA", "suit": "♠"})
+        error_message = ws.receive_json()
+        assert error_message["type"] == "error"
+
+        ws.send_json({
+            "type": "request_early_turn",
+            "player_id": "userA",
+            "suit": "♥",
+            "roundId": room.round_id,
+        })
+        event_message = ws.receive_json()
+        assert event_message["type"] == "EARLY_TURN_GRANTED"
+        assert event_message["playerId"] == "userA"
+        assert event_message["suit"] == "♥"
+
+        state_update = ws.receive_json()
+        assert state_update["type"] == "state"
+        assert state_update["payload"]["turn_player_id"] == "userA"

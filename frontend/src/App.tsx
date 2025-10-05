@@ -8,7 +8,7 @@ import TableView from './components/Table'
 import Hand from './components/Hand'
 import ScoreBoard from './components/ScoreBoard'
 import { getState, verify } from './api'
-import type { GameState, Card } from './types'
+import type { GameState, Card, Suit } from './types'
 import { applyThemeOnce, watchTelegramTheme } from './theme'
 import { initViewportSizing } from './viewport'
 import { createRoomChannel, type RoomChannel } from './room-channel'
@@ -23,6 +23,38 @@ type CountdownSource = 'board' | 'phase' | 'event'
 type CountdownInfo = {
   endsAt: number
   source: CountdownSource
+}
+
+type EarlyTurnOption = {
+  suit: Suit
+  cards: Card[]
+  summary: string
+}
+
+const EARLY_SUIT_ORDER: Suit[] = ['♠', '♥', '♦', '♣']
+const EARLY_RANK_ORDER = [14, 13, 12, 11, 10, 9, 8, 7, 6]
+const EARLY_RANK_LABEL: Record<number, string> = {
+  6: '6',
+  7: '7',
+  8: '8',
+  9: '9',
+  10: '10',
+  11: 'J',
+  12: 'Q',
+  13: 'K',
+  14: 'A',
+}
+
+function rankWeight(rank: number): number {
+  const idx = EARLY_RANK_ORDER.indexOf(rank)
+  return idx === -1 ? EARLY_RANK_ORDER.length : idx
+}
+
+function formatSummary(cards: Card[]): string {
+  return [...cards]
+    .sort((a, b) => rankWeight(a.rank) - rankWeight(b.rank))
+    .map(card => EARLY_RANK_LABEL[card.rank] ?? String(card.rank))
+    .join(' · ')
 }
 
 function toMillis(value: unknown): number | null {
@@ -148,6 +180,11 @@ export default function App(){
     if (eventType === 'TURN_SWITCHED') {
       countdownSyncRef.current = false
     }
+
+    if (eventType === 'EARLY_TURN_GRANTED') {
+      countdownSyncRef.current = false
+      setCountdownInfo(null)
+    }
   }, [])
 
   useEffect(() => {
@@ -259,6 +296,28 @@ export default function App(){
     return ok
   }, [roomId, user?.id])
 
+  const earlyTurnOptions = useMemo<EarlyTurnOption[]>(() => {
+    if (!state?.hands) return []
+    const grouped = new Map<Suit, Card[]>()
+    state.hands.forEach(card => {
+      if (!card?.suit) return
+      const suit = card.suit as Suit
+      const list = grouped.get(suit) ?? []
+      list.push(card)
+      grouped.set(suit, list)
+    })
+    const combos: EarlyTurnOption[] = []
+    grouped.forEach((cards, suit) => {
+      if (cards.length !== 4) return
+      const aces = cards.filter(card => card.rank === 14).length
+      const high = cards.filter(card => card.rank === 14 || card.rank === 10).length
+      if (aces < 1 || high < 3) return
+      combos.push({ suit, cards: [...cards], summary: formatSummary(cards) })
+    })
+    combos.sort((a, b) => EARLY_SUIT_ORDER.indexOf(a.suit) - EARLY_SUIT_ORDER.indexOf(b.suit))
+    return combos
+  }, [state?.hands])
+
   function onPlay(cards: Card[], meta?: { viaDrop?: boolean }){
     if(!user || !roomId || !state) return
     if(cards.length === 0) return
@@ -279,6 +338,13 @@ export default function App(){
     if(!user || !roomId || !state) return
     sendAction({ type: 'declare', player_id: user.id, combo })
   }
+
+  const handleRequestEarlyTurn = useCallback((suit: Suit) => {
+    if (!user || !roomId) return
+    const payload: Record<string, unknown> = { type: 'request_early_turn', player_id: user.id, suit }
+    if (state?.round_id) payload.roundId = state.round_id
+    sendAction(payload)
+  }, [user?.id, roomId, state?.round_id, sendAction])
 
   useEffect(() => {
     const deadline = state?.turn_deadline_ts
@@ -317,6 +383,16 @@ export default function App(){
   const countdownSecondsFloat = countdownInfo ? (countdownInfo.endsAt - countdownNow) / 1000 : null
   const countdownActive = typeof countdownSecondsFloat === 'number' && countdownSecondsFloat > 0
   const countdownSeconds = countdownActive ? Math.max(1, Math.ceil(countdownSecondsFloat)) : undefined
+
+  const canRequestEarlyTurn = useMemo(() => {
+    if (!state || !user) return false
+    if (!state.started || state.match_over) return false
+    if (!state.round_id) return false
+    if (!state.turn_player_id || state.turn_player_id === user.id) return false
+    if (state.trick) return false
+    if (countdownActive) return false
+    return earlyTurnOptions.length > 0
+  }, [state, user?.id, countdownActive, earlyTurnOptions])
 
   useEffect(() => {
     if (!countdownInfo) return
@@ -381,7 +457,14 @@ export default function App(){
                 <span className="meta-chip">Сброс: {state.config.discardVisibility === 'open' ? 'открытый' : 'закрытый'}</span>
               )}
             </div>
-          <Controls state={state} onDeclare={onDeclare} isBusy={countdownActive} />
+          <Controls
+            state={state}
+            onDeclare={onDeclare}
+            isBusy={countdownActive}
+            earlyTurnOptions={earlyTurnOptions}
+            canRequestEarlyTurn={canRequestEarlyTurn}
+            onRequestEarlyTurn={handleRequestEarlyTurn}
+          />
           </section>
 
           <TableView
