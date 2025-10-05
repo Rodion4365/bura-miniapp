@@ -9,6 +9,12 @@ import Hand from './components/Hand'
 import ScoreBoard from './components/ScoreBoard'
 import { getState, verify } from './api'
 import type { GameState, Card, Suit } from './types'
+import {
+  describeEarlyTurnCombo,
+  formatEarlyTurnSummary,
+  isAllowedEarlyTurnCombo,
+  type EarlyTurnPattern,
+} from './utils/earlyTurn'
 import { applyThemeOnce, watchTelegramTheme } from './theme'
 import { initViewportSizing } from './viewport'
 import { createRoomChannel, type RoomChannel } from './room-channel'
@@ -26,36 +32,17 @@ type CountdownInfo = {
 }
 
 type EarlyTurnOption = {
-  suit: Suit
+  id: string
   cards: Card[]
   summary: string
+  label: string
+  pattern: EarlyTurnPattern
+  suit?: Suit
+  aces: number
+  tens: number
 }
 
 const EARLY_SUIT_ORDER: Suit[] = ['♠', '♥', '♦', '♣']
-const EARLY_RANK_ORDER = [14, 13, 12, 11, 10, 9, 8, 7, 6]
-const EARLY_RANK_LABEL: Record<number, string> = {
-  6: '6',
-  7: '7',
-  8: '8',
-  9: '9',
-  10: '10',
-  11: 'J',
-  12: 'Q',
-  13: 'K',
-  14: 'A',
-}
-
-function rankWeight(rank: number): number {
-  const idx = EARLY_RANK_ORDER.indexOf(rank)
-  return idx === -1 ? EARLY_RANK_ORDER.length : idx
-}
-
-function formatSummary(cards: Card[]): string {
-  return [...cards]
-    .sort((a, b) => rankWeight(a.rank) - rankWeight(b.rank))
-    .map(card => EARLY_RANK_LABEL[card.rank] ?? String(card.rank))
-    .join(' · ')
-}
 
 function toMillis(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null
@@ -297,24 +284,48 @@ export default function App(){
   }, [roomId, user?.id])
 
   const earlyTurnOptions = useMemo<EarlyTurnOption[]>(() => {
-    if (!state?.hands) return []
-    const grouped = new Map<Suit, Card[]>()
-    state.hands.forEach(card => {
-      if (!card?.suit) return
-      const suit = card.suit as Suit
-      const list = grouped.get(suit) ?? []
-      list.push(card)
-      grouped.set(suit, list)
-    })
+    const hand = state?.hands?.filter(card => Boolean(card)) as Card[] | undefined
+    if (!hand || hand.length < 4) return []
     const combos: EarlyTurnOption[] = []
-    grouped.forEach((cards, suit) => {
-      if (cards.length !== 4) return
-      const aces = cards.filter(card => card.rank === 14).length
-      const high = cards.filter(card => card.rank === 14 || card.rank === 10).length
-      if (aces < 1 || high < 3) return
-      combos.push({ suit, cards: [...cards], summary: formatSummary(cards) })
+    const seen = new Set<string>()
+    for (let i = 0; i < hand.length - 3; i += 1) {
+      for (let j = i + 1; j < hand.length - 2; j += 1) {
+        for (let k = j + 1; k < hand.length - 1; k += 1) {
+          for (let m = k + 1; m < hand.length; m += 1) {
+            const cards = [hand[i], hand[j], hand[k], hand[m]]
+            if (!isAllowedEarlyTurnCombo(cards)) continue
+            const key = [...cards]
+              .map(card => card.id || `${card.suit}-${card.rank}`)
+              .sort()
+              .join('|')
+            if (seen.has(key)) continue
+            seen.add(key)
+            const description = describeEarlyTurnCombo(cards)
+            combos.push({
+              id: key,
+              cards: [...cards],
+              summary: formatEarlyTurnSummary(cards),
+              label: description.label,
+              pattern: description.pattern,
+              suit: description.suit,
+              aces: description.aces,
+              tens: description.tens,
+            })
+          }
+        }
+      }
+    }
+    combos.sort((a, b) => {
+      if (a.pattern !== b.pattern) return a.pattern === 'same_suit' ? -1 : 1
+      if (a.pattern === 'same_suit' && b.pattern === 'same_suit') {
+        const orderA = a.suit ? EARLY_SUIT_ORDER.indexOf(a.suit) : EARLY_SUIT_ORDER.length
+        const orderB = b.suit ? EARLY_SUIT_ORDER.indexOf(b.suit) : EARLY_SUIT_ORDER.length
+        return orderA - orderB
+      }
+      if (a.aces !== b.aces) return b.aces - a.aces
+      if (a.tens !== b.tens) return b.tens - a.tens
+      return a.summary.localeCompare(b.summary, 'ru')
     })
-    combos.sort((a, b) => EARLY_SUIT_ORDER.indexOf(a.suit) - EARLY_SUIT_ORDER.indexOf(b.suit))
     return combos
   }, [state?.hands])
 
@@ -339,9 +350,9 @@ export default function App(){
     sendAction({ type: 'declare', player_id: user.id, combo })
   }
 
-  const handleRequestEarlyTurn = useCallback((suit: Suit) => {
+  const handleRequestEarlyTurn = useCallback((cards: Card[]) => {
     if (!user || !roomId) return
-    const payload: Record<string, unknown> = { type: 'request_early_turn', player_id: user.id, suit }
+    const payload: Record<string, unknown> = { type: 'request_early_turn', player_id: user.id, cards }
     if (state?.round_id) payload.roundId = state.round_id
     sendAction(payload)
   }, [user?.id, roomId, state?.round_id, sendAction])

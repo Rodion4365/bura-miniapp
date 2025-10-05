@@ -435,26 +435,30 @@ class Room:
             return []
         return []
 
-    def _is_valid_four_card_throw(self, cards: Sequence[Card]) -> bool:
+    def _is_valid_four_card_combo(self, cards: Sequence[Card]) -> bool:
         if len(cards) != 4:
             return False
         suits = {card.suit for card in cards}
         if len(suits) == 1:
             return True
-        ranks = [card.rank for card in cards]
-        rank_counts = Counter(ranks)
-        tens = rank_counts.get(10, 0)
+        rank_counts = Counter(card.rank for card in cards)
         aces = rank_counts.get(14, 0)
-        other_ranks = set(rank_counts.keys()) - {10, 14}
-        if other_ranks:
+        tens = rank_counts.get(10, 0)
+        if set(rank_counts.keys()) - {10, 14}:
             return False
-        if tens == 4 or aces == 4:
-            return True
-        if 0 < tens < 4 and 0 < aces < 4 and tens + aces == 4:
-            return True
-        return False
+        allowed_patterns = {(1, 3), (2, 2), (3, 1), (4, 0)}
+        return (aces, tens) in allowed_patterns
 
-    def request_early_turn(self, player_id: str, suit: str, *, round_id: Optional[str] = None) -> List[Card]:
+    def _is_valid_four_card_throw(self, cards: Sequence[Card]) -> bool:
+        return self._is_valid_four_card_combo(cards)
+
+    def request_early_turn(
+        self,
+        player_id: str,
+        cards_payload: Sequence[dict | Card],
+        *,
+        round_id: Optional[str] = None,
+    ) -> List[Card]:
         self._check_timeout()
         self._check_reveal()
         if self.reveal_until_ts is not None:
@@ -467,23 +471,42 @@ class Room:
             raise ValueError("Already your turn")
         if self.current_trick is not None:
             raise ValueError("Cannot request during trick")
-        if suit not in SUITS:
-            raise ValueError("Unknown suit")
-        hand = self.hands.get(player_id)
+        if (
+            not isinstance(cards_payload, Sequence)
+            or isinstance(cards_payload, (str, bytes))
+            or len(cards_payload) != 4
+        ):
+            raise ValueError("Нужно выбрать ровно 4 карты")
+        hand = list(self.hands.get(player_id) or [])
         if not hand:
             raise ValueError("Hand not available")
-        same_suit = [card for card in hand if card.suit == suit]
-        if len(same_suit) != 4:
-            raise ValueError("Нужны ровно 4 карты выбранной масти")
-        aces = sum(1 for card in same_suit if card.rank == 14)
-        high_cards = sum(1 for card in same_suit if card.rank in (14, 10))
-        if aces < 1:
-            raise ValueError("В наборе должен быть хотя бы один туз")
-        if high_cards < 3:
-            raise ValueError("Требуются как минимум три туза или десятки")
+
+        chosen: List[Card] = []
+        used_indexes: set[int] = set()
+
+        for payload in cards_payload:
+            card = payload if isinstance(payload, Card) else Card.model_validate(payload)
+            match_index: Optional[int] = None
+            for idx, hand_card in enumerate(hand):
+                if idx in used_indexes:
+                    continue
+                if card.id and hand_card.id == card.id:
+                    match_index = idx
+                    break
+                if hand_card.suit == card.suit and hand_card.rank == card.rank:
+                    match_index = idx
+                    break
+            if match_index is None:
+                raise ValueError("Card not in hand")
+            used_indexes.add(match_index)
+            chosen.append(hand[match_index])
+
+        if not self._is_valid_four_card_combo(chosen):
+            raise ValueError("Недопустимый набор для досрочного хода")
+
         self.turn_idx = self._player_index(player_id)
         self._refresh_deadline()
-        return same_suit
+        return chosen
 
     def play_cards(
         self,

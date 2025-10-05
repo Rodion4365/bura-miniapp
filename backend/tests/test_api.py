@@ -117,9 +117,9 @@ def test_request_early_turn_via_ws():
     room = app_mod.ROOMS[room_id]
     room.hands["userA"] = [
         _make_card("♥", 14, 1),
-        _make_card("♥", 14, 2),
+        _make_card("♣", 14, 1),
         _make_card("♥", 10, 1),
-        _make_card("♥", 9, 1),
+        _make_card("♦", 10, 1),
     ]
     room.hands["userB"] = [
         _make_card("♠", 6, 1),
@@ -135,20 +135,29 @@ def test_request_early_turn_via_ws():
         assert first_state["type"] == "state"
         assert first_state["payload"]["turn_player_id"] == "userB"
 
-        ws.send_json({"type": "request_early_turn", "player_id": "userA", "suit": "♠"})
+        ws.send_json({
+            "type": "request_early_turn",
+            "player_id": "userA",
+            "cards": [
+                room.hands["userA"][0].model_dump(mode="json"),
+                room.hands["userA"][1].model_dump(mode="json"),
+                room.hands["userA"][2].model_dump(mode="json"),
+                _make_card("♠", 10, 2).model_dump(mode="json"),
+            ],
+        })
         error_message = ws.receive_json()
         assert error_message["type"] == "error"
 
         ws.send_json({
             "type": "request_early_turn",
             "player_id": "userA",
-            "suit": "♥",
+            "cards": [card.model_dump(mode="json") for card in room.hands["userA"]],
             "roundId": room.round_id,
         })
         event_message = ws.receive_json()
         assert event_message["type"] == "EARLY_TURN_GRANTED"
         assert event_message["playerId"] == "userA"
-        assert event_message["suit"] == "♥"
+        assert event_message["suit"] is None
 
         state_update = ws.receive_json()
         assert state_update["type"] == "state"
