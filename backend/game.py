@@ -646,19 +646,29 @@ class Room:
             return ({p.id: 0 for p in self.players}, [])
         max_points = max(points.values()) if points else 0
         leaders = [pid for pid, value in points.items() if value == max_points]
+        # A round only has a winner if there is a single leader with strictly
+        # more points than everyone else. In case of a tie on top we treat the
+        # round as a draw and no penalties are applied.
+        has_unique_winner = len(leaders) == 1
+
         penalties: Dict[str, int] = {}
         for player in self.players:
             pid = player.id
             value = points.get(pid, 0)
-            if pid in leaders:
+            if has_unique_winner and pid == leaders[0]:
                 penalties[pid] = 0
-            elif value == 31:
-                penalties[pid] = 2
-            elif value == 0:
+                continue
+            if not has_unique_winner or value >= max_points:
+                penalties[pid] = 0
+                continue
+            if value == 0:
                 penalties[pid] = 6
-            else:
+            elif 1 <= value <= 30:
                 penalties[pid] = 4
-        return penalties, leaders
+            else:  # 31 <= value < max_points
+                penalties[pid] = 2
+
+        return penalties, leaders if has_unique_winner else []
 
     def _finalize_round(self, penalties: Dict[str, int], leaders: List[str]):
         for pid, value in penalties.items():
@@ -690,7 +700,7 @@ class Room:
                 PlayerTotals(
                     player_id=pid,
                     name=player.name,
-                    score=self.game_wins.get(pid, 0),
+                    score=self.scores.get(pid, 0),
                     points=points,
                 )
             )
