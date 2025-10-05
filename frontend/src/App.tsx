@@ -18,6 +18,66 @@ declare global { interface Window { Telegram: any } }
 
 type Screen = 'menu' | 'create' | 'join' | 'room' | 'rules'
 
+type CountdownSource = 'board' | 'phase' | 'event'
+
+type CountdownInfo = {
+  endsAt: number
+  source: CountdownSource
+}
+
+function toMillis(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return value > 1e12 ? value : value * 1000
+}
+
+function resolveCountdownFromState(state?: GameState | null): CountdownInfo | null {
+  if (!state) return null
+  const revealUntil = state.board?.revealUntilTs
+  if (typeof revealUntil === 'number' && Number.isFinite(revealUntil)) {
+    return { endsAt: revealUntil * 1000, source: 'board' }
+  }
+  const phase = (state as any)?.phase
+  if (phase === 'COUNTDOWN') {
+    const rawEnds: unknown[] = [
+      (state as any)?.phaseEndsAt,
+      (state as any)?.phaseEndsAtTs,
+      (state as any)?.phaseEndsAtMs,
+      (state as any)?.countdownEndsAt,
+      (state as any)?.countdownEndsAtTs,
+      (state as any)?.countdownEndsAtMs,
+    ]
+    for (const value of rawEnds) {
+      const ms = toMillis(value)
+      if (ms) {
+        return { endsAt: ms, source: 'phase' }
+      }
+    }
+    const remainingCandidates: unknown[] = [
+      (state as any)?.phaseRemainingSec,
+      (state as any)?.countdownRemainingSec,
+      (state as any)?.nextTurnInSec,
+    ]
+    const remaining = remainingCandidates.find(value => typeof value === 'number' && Number.isFinite(value)) as number | undefined
+    if (typeof remaining === 'number') {
+      const nowCandidates: unknown[] = [
+        (state as any)?.serverNow,
+        (state as any)?.serverNowMs,
+        (state as any)?.now,
+      ]
+      let baseNow = Date.now()
+      for (const candidate of nowCandidates) {
+        const ms = toMillis(candidate)
+        if (ms) {
+          baseNow = ms
+          break
+        }
+      }
+      return { endsAt: baseNow + remaining * 1000, source: 'phase' }
+    }
+  }
+  return null
+}
+
 export default function App(){
   const tg = window.Telegram?.WebApp
   const [user, setUser] = useState<{id:string; name:string; avatar?:string}>()
@@ -28,12 +88,102 @@ export default function App(){
   const [screen, setScreen] = useState<Screen>('menu')
   const [dragPreview, setDragPreview] = useState<{cards: Card[]; valid: boolean} | null>(null)
   const [playStamp, setPlayStamp] = useState(0)
+  const [countdownInfo, setCountdownInfo] = useState<CountdownInfo | null>(null)
+  const [countdownNow, setCountdownNow] = useState(() => Date.now())
   const channelRef = useRef<RoomChannel | null>(null)
+  const countdownSyncRef = useRef(false)
   const cardAssets = useMemo(() => {
     const map = new Map<string, Card>()
     state?.cards?.forEach(card => map.set(card.id, card))
     return map
   }, [state?.cards])
+
+  const handleRoomEvent = useCallback((evt: any) => {
+    if (!evt) return
+    const eventType = typeof evt.event === 'string' ? evt.event : typeof evt.type === 'string' ? evt.type : undefined
+    if (!eventType || eventType === 'state') return
+
+    if (eventType === 'TRICK_RESOLVED') {
+      const payload = (evt.payload ?? evt.data ?? {}) as Record<string, unknown>
+      const serverCandidates: unknown[] = [
+        payload.serverNow,
+        payload.server_now,
+        payload.serverNowMs,
+        payload.server_now_ms,
+        evt.serverNow,
+        evt.server_now,
+        evt.serverNowMs,
+        evt.server_now_ms,
+      ]
+      let baseNow = Date.now()
+      for (const candidate of serverCandidates) {
+        const ms = toMillis(candidate)
+        if (ms) {
+          baseNow = ms
+          break
+        }
+      }
+      const nextCandidates: unknown[] = [
+        payload.nextTurnInSec,
+        payload.next_turn_in_sec,
+        payload.next_turn_in,
+        payload.nextTurnIn,
+        evt.nextTurnInSec,
+        evt.next_turn_in_sec,
+        evt.next_turn_in,
+        evt.nextTurnIn,
+      ]
+      const nextValue = nextCandidates.find(value => typeof value === 'number' && Number.isFinite(value)) as number | undefined
+      if (typeof nextValue === 'number') {
+        countdownSyncRef.current = false
+        setCountdownInfo({ endsAt: baseNow + nextValue * 1000, source: 'event' })
+      }
+    }
+
+    if (eventType === 'CLEAR_TABLE') {
+      countdownSyncRef.current = false
+      setCountdownInfo(null)
+    }
+
+    if (eventType === 'TURN_SWITCHED') {
+      countdownSyncRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!state) {
+      setCountdownInfo(null)
+      return
+    }
+    const derived = resolveCountdownFromState(state)
+    if (derived) {
+      setCountdownInfo(prev => {
+        if (prev && Math.abs(prev.endsAt - derived.endsAt) < 400 && prev.source === derived.source) {
+          return prev
+        }
+        return derived
+      })
+      return
+    }
+    const boardEmpty = !state.board || (state.board.attacker.length === 0 && state.board.defender.length === 0)
+    const phase = (state as any)?.phase
+    if (boardEmpty && phase !== 'COUNTDOWN') {
+      setCountdownInfo(null)
+    }
+  }, [state])
+
+  useEffect(() => {
+    if (!countdownInfo) {
+      return
+    }
+    setCountdownNow(Date.now())
+    const id = window.setInterval(() => setCountdownNow(Date.now()), 250)
+    return () => window.clearInterval(id)
+  }, [countdownInfo?.endsAt])
+
+  useEffect(() => {
+    countdownSyncRef.current = false
+  }, [countdownInfo?.endsAt])
 
   // Тема
   useEffect(() => {
@@ -90,6 +240,7 @@ export default function App(){
         setState(next)
         setScreen('room')
       },
+      onEvent: handleRoomEvent,
       pollIntervalMs: 3000,
     })
     channelRef.current = channel
@@ -97,7 +248,7 @@ export default function App(){
       channel.close()
       if (channelRef.current === channel) channelRef.current = null
     }
-  }, [roomId, user?.id])
+  }, [roomId, user?.id, handleRoomEvent])
 
   const sendAction = useCallback((message: unknown)=>{
     if (!channelRef.current) return false
@@ -163,6 +314,25 @@ export default function App(){
     return Math.ceil(secondsLeft)
   }, [state?.turn_deadline_ts, now])
 
+  const countdownSecondsFloat = countdownInfo ? (countdownInfo.endsAt - countdownNow) / 1000 : null
+  const countdownActive = typeof countdownSecondsFloat === 'number' && countdownSecondsFloat > 0
+  const countdownSeconds = countdownActive ? Math.max(1, Math.ceil(countdownSecondsFloat)) : undefined
+
+  useEffect(() => {
+    if (!countdownInfo) return
+    if (!roomId || !user) return
+    if (typeof countdownSecondsFloat === 'number' && countdownSecondsFloat <= 0 && !countdownSyncRef.current) {
+      countdownSyncRef.current = true
+      getState(roomId, user.id).then(setState).catch(() => {})
+    }
+  }, [countdownInfo, countdownSecondsFloat, roomId, user?.id])
+
+  useEffect(() => {
+    if (countdownActive) {
+      setDragPreview(null)
+    }
+  }, [countdownActive])
+
   // рендер
   return (
     <div className="app">
@@ -211,7 +381,7 @@ export default function App(){
                 <span className="meta-chip">Сброс: {state.config.discardVisibility === 'open' ? 'открытый' : 'закрытый'}</span>
               )}
             </div>
-            <Controls state={state} onDeclare={onDeclare} />
+          <Controls state={state} onDeclare={onDeclare} isBusy={countdownActive} />
           </section>
 
           <TableView
@@ -221,6 +391,8 @@ export default function App(){
             onDropPlay={(cards)=> onPlay(cards, { viaDrop: true })}
             cardAssets={cardAssets}
             fallbackTimer={fallbackTimer}
+            countdownSeconds={countdownSeconds}
+            isCountdownActive={countdownActive}
           />
 
           {state.hands && (
@@ -235,6 +407,8 @@ export default function App(){
                 meId={user?.id}
                 onPlay={onPlay}
                 onDragPreview={setDragPreview}
+                isLocked={countdownActive}
+                lockReason="Ожидайте очистки стола"
               />
             </section>
           )}

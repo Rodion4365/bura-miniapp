@@ -6,6 +6,7 @@
 import { getState } from './api'
 
 type Listener = (state: any) => void
+type EventListener = (event: any) => void
 
 export type RoomChannel = {
   /** Завершить работу канала и закрыть WebSocket */
@@ -23,9 +24,10 @@ export function createRoomChannel(opts: {
   roomId: string,
   playerId: string,
   onState: Listener,
+  onEvent?: EventListener,
   pollIntervalMs?: number
 }): RoomChannel {
-  const { wsBase, roomId, playerId, onState } = opts
+  const { wsBase, roomId, playerId, onState, onEvent } = opts
   const pollInterval = opts.pollIntervalMs ?? 3000
 
   let ws: WebSocket | null = null
@@ -64,7 +66,11 @@ export function createRoomChannel(opts: {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data)
-        if (msg?.type === 'state' && msg?.payload) onState(msg.payload)
+        if (msg?.type === 'state' && msg?.payload) {
+          onState(msg.payload)
+        } else if (typeof msg?.type === 'string') {
+          onEvent?.(msg)
+        }
       } catch (_) {}
     }
     ws.onclose = () => { stopPing(); startPolling(); scheduleReconnect() }

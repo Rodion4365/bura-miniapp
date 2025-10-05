@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import type { Card, CardColor, GameState, Player, Suit, TrickState } from '../types'
 import CardView from './CardView'
 
@@ -11,6 +11,8 @@ type Props = {
   onDropPlay: (cards: Card[]) => void
   cardAssets: Map<string, Card>
   fallbackTimer?: number
+  countdownSeconds?: number
+  isCountdownActive?: boolean
 }
 
 type BoardEntry = {
@@ -92,11 +94,34 @@ function pickBoard(state: GameState): BoardSnapshot {
   return resolveBoardFromTrick(state.trick)
 }
 
-export default function TableView({ state, meId, dragPreview, onDropPlay, cardAssets, fallbackTimer }: Props) {
+export default function TableView({ state, meId, dragPreview, onDropPlay, cardAssets, fallbackTimer, countdownSeconds, isCountdownActive }: Props) {
   const orderedPlayers = useMemo(() => sortPlayers(state.players, meId), [state.players, meId])
   const board = useMemo(() => pickBoard(state), [state])
   const activePlayerId = state.turn_player_id
-  const dropActive = Boolean(dragPreview?.valid && activePlayerId === meId)
+  const [localNow, setLocalNow] = useState(() => Date.now())
+  const dropActive = Boolean(!isCountdownActive && dragPreview?.valid && activePlayerId === meId)
+
+  useEffect(() => {
+    if (typeof countdownSeconds === 'number') {
+      return undefined
+    }
+    if (!board.revealUntilTs) {
+      return undefined
+    }
+    setLocalNow(Date.now())
+    const id = window.setInterval(() => setLocalNow(Date.now()), 250)
+    return () => window.clearInterval(id)
+  }, [board.revealUntilTs, countdownSeconds])
+
+  const fallbackCountdown =
+    typeof countdownSeconds === 'number'
+      ? undefined
+      : board.revealUntilTs
+        ? Math.max(0, Math.ceil((board.revealUntilTs * 1000 - localNow) / 1000))
+        : undefined
+  const countdownValue = countdownSeconds ?? fallbackCountdown
+  const showCountdown = typeof countdownValue === 'number' && countdownValue > 0
+  const countdownLabel = showCountdown ? Math.max(1, countdownValue) : undefined
 
   const handleDragOver: React.DragEventHandler<HTMLDivElement> = event => {
     if (dropActive) {
@@ -112,6 +137,10 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
   }
 
   const previewCards = dropActive ? dragPreview?.cards.slice(0, MAX_PREVIEW) ?? [] : []
+
+  const boardClass = ['table-board', dropActive ? 'drop-active' : '', isCountdownActive ? 'frozen' : '']
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <section className="game-table">
@@ -145,7 +174,7 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
       </header>
 
       <div
-        className={`table-board ${dropActive ? 'drop-active' : ''}`}
+        className={boardClass}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
@@ -203,9 +232,9 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
         {dropActive && <div className="drop-hint">Отпустите карты, чтобы сыграть</div>}
       </div>
 
-      {board.revealUntilTs && (
+      {countdownLabel && (
         <div className="reveal-indicator">
-          Смена хода через {Math.max(0, Math.ceil((board.revealUntilTs * 1000 - Date.now()) / 1000))}с
+          Смена хода через {countdownLabel}с
         </div>
       )}
     </section>

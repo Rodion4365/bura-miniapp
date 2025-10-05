@@ -84,6 +84,8 @@ export type BoardState = {
   revealUntilTs?: number
 }
 
+export type GamePhase = 'LOBBY' | 'PLAY' | 'COUNTDOWN' | (string & {})
+
 export type PlayerClock = {
   playerId: string
   name: string
@@ -133,4 +135,12 @@ export type GameState = {
   cards?: Card[]
   board?: BoardState
   tablePlayers?: PlayerClock[]
+  phase?: GamePhase
+  phaseEndsAt?: number
+  phaseEndsAtTs?: number
+  phaseEndsAtMs?: number
+  phaseRemainingSec?: number
+  countdownRemainingSec?: number
+  nextTurnInSec?: number
+  serverNow?: number
 }

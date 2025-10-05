@@ -13,6 +13,8 @@ type Props = {
   onPlay: (cards: Card[], meta?: { viaDrop?: boolean }) => void
   onDragPreview?: (preview: DragPreview | null) => void
   meId?: string
+  isLocked?: boolean
+  lockReason?: string
 }
 
 const RANK_ORDER = [6, 7, 8, 9, 10, 11, 12, 13, 14]
@@ -162,7 +164,7 @@ function isVisibleCard(card: PublicCard): card is PublicCard & { suit: Suit; ran
   return Boolean(card.faceUp && card.suit && card.rank)
 }
 
-export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay, onDragPreview, meId }: Props) {
+export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay, onDragPreview, meId, isLocked, lockReason }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
   const pointerRef = useRef<{ index: number; y: number } | null>(null)
@@ -213,8 +215,15 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }, [onDragPreview])
 
   useEffect(() => {
+    if (!isLocked) return
+    setDragging(false)
+    pointerRef.current = null
+    onDragPreview?.(null)
+  }, [isLocked, onDragPreview])
+
+  useEffect(() => {
     setError(null)
-  }, [selected.join(','), isMyTurn, requiredCount])
+  }, [selected.join(','), isMyTurn, requiredCount, isLocked])
 
   const selectedCards = selected.map(idx => cards[idx]).filter(Boolean)
   const ownerLabel = trick ? (trick.owner_id === meId ? 'Ты' : trick.owner_id?.slice(0, 4) ?? '—') : '—'
@@ -252,14 +261,17 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   const validation = useMemo(() => evaluateSelection(selected), [selected, leaderMode, requiredCount])
-  const canSubmit = Boolean(isMyTurn && validation.countValid)
+  const lockMessage = lockReason ?? 'Ожидайте очистки стола'
+  const canSubmit = Boolean(isMyTurn && !isLocked && validation.countValid)
   const helperText = useMemo(() => {
+    if (isLocked) return lockMessage
     if (!isMyTurn) return 'Ждём хода соперника'
     if (error) return error
     return validation.message
-  }, [isMyTurn, validation.message, error])
+  }, [isLocked, lockMessage, isMyTurn, validation.message, error])
 
   function toggle(index: number) {
+    if (isLocked) return
     setSelected(prev => {
       if (prev.includes(index)) {
         return prev.filter(i => i !== index)
@@ -276,6 +288,10 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   function handlePlay(meta?: { viaDrop?: boolean }) {
+    if (isLocked) {
+      setError(lockMessage)
+      return
+    }
     if (!canSubmit) {
       setError(isMyTurn ? validation.message : 'Сейчас ход другого игрока')
       return
@@ -286,12 +302,14 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   function handleClear() {
+    if (isLocked) return
     setSelected([])
     setError(null)
     onDragPreview?.(null)
   }
 
   function applyHint(baseIndex?: number) {
+    if (isLocked) return
     let suggestion: number[] | null = null
     if (leaderMode) {
       if (baseIndex !== undefined) {
@@ -310,6 +328,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   function handleDoubleClick(index: number) {
+    if (isLocked) return
     if (leaderMode) {
       applyHint(index)
     } else {
@@ -318,7 +337,7 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   function handleDragStart(index: number, event: React.DragEvent<HTMLButtonElement>) {
-    if (!isMyTurn) {
+    if (!isMyTurn || isLocked) {
       event.preventDefault()
       return
     }
@@ -341,12 +360,17 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   function handlePointerDown(index: number, event: React.PointerEvent<HTMLButtonElement>) {
+    if (isLocked) return
     if (event.pointerType === 'touch') {
       pointerRef.current = { index, y: event.clientY }
     }
   }
 
   function handlePointerUp(index: number, event: React.PointerEvent<HTMLButtonElement>) {
+    if (isLocked) {
+      pointerRef.current = null
+      return
+    }
     if (pointerRef.current && pointerRef.current.index === index) {
       const deltaY = event.clientY - pointerRef.current.y
       if (deltaY < -70 && selected.length === 1 && selected[0] === index) {
@@ -357,6 +381,10 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (isLocked) {
+      event.preventDefault()
+      return
+    }
     if (cards.length === 0) return
     if (event.key === 'ArrowRight') {
       event.preventDefault()
@@ -384,10 +412,11 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
 
   return (
     <div
-      className={`hand ${dragging ? 'dragging' : ''}`}
+      className={`hand ${dragging ? 'dragging' : ''} ${isLocked ? 'locked' : ''}`.trim()}
       ref={containerRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      aria-disabled={isLocked}
     >
       <div className="hand-header">
         <div className="hand-hint">
@@ -417,9 +446,10 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
                 buttonsRef.current[index] = el
               }}
               className={`hand-card ${isSelected ? 'selected' : ''} ${incompatible ? 'incompatible' : ''}`}
+              disabled={isLocked}
               onClick={() => toggle(index)}
               onDoubleClick={() => handleDoubleClick(index)}
-              draggable={Boolean(isMyTurn)}
+              draggable={Boolean(isMyTurn && !isLocked)}
               onDragStart={event => handleDragStart(index, event)}
               onDragEnd={handleDragEnd}
               onPointerDown={event => handlePointerDown(index, event)}
@@ -431,10 +461,10 @@ export default function Hand({ cards, trick, trump, isMyTurn, playStamp, onPlay,
         })}
       </div>
       <div className="hand-actions">
-        <button className="chip" onClick={handleClear} type="button">
+        <button className="chip" onClick={handleClear} type="button" disabled={isLocked}>
           Очистить выбор
         </button>
-        <button className="chip" onClick={() => applyHint()} type="button">
+        <button className="chip" onClick={() => applyHint()} type="button" disabled={isLocked}>
           Подсказка
         </button>
         <button className="button primary" disabled={!canSubmit} onClick={() => handlePlay({ viaDrop: false })}>
