@@ -1,11 +1,20 @@
 import React from 'react'
 import { startGame } from '../api'
-import type { GameState } from '../types'
+import type { Card, GameState, Suit } from '../types'
 
 type Props = {
   state?: GameState
   onDeclare: (combo: string) => void
   isBusy?: boolean
+  earlyTurnOptions?: EarlyTurnOption[]
+  canRequestEarlyTurn?: boolean
+  onRequestEarlyTurn?: (suit: Suit) => void
+}
+
+type EarlyTurnOption = {
+  suit: Suit
+  cards: Card[]
+  summary: string
 }
 
 const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string; hint: string }[] = [
@@ -15,12 +24,14 @@ const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string; hint:
   { key: 'four_ends', label: '4 конца', hint: '4 десятки или 4 туза' },
 ]
 
-export default function Controls({ state, onDeclare, isBusy }: Props){
+export default function Controls({ state, onDeclare, isBusy, earlyTurnOptions, canRequestEarlyTurn, onRequestEarlyTurn }: Props){
   const requiredPlayers = state?.config?.maxPlayers ?? state?.variant?.players_min ?? 2
   const canStart = !!state && !state.started && state.players.length >= requiredPlayers
   const trickIndex = state?.trick_index ?? 0
   const canDeclare = !!state?.started && !state?.trick && !state?.match_over && trickIndex === 0 && !isBusy
   const combos = COMBOS.filter(combo => combo.key !== 'four_ends' || state?.config?.enableFourEnds)
+  const earlyOptions = earlyTurnOptions ?? []
+  const disableEarlyTurn = Boolean(isBusy || !canRequestEarlyTurn || !onRequestEarlyTurn)
 
   return (
     <div className="controls">
@@ -48,6 +59,29 @@ export default function Controls({ state, onDeclare, isBusy }: Props){
           </button>
         ))}
       </div>
+
+      {earlyOptions.length > 0 && (
+        <div className="combo-panel">
+          <span className="combo-title">Досрочный ход:</span>
+          {earlyOptions.map(option => {
+            const suitClass = option.suit === '♥' || option.suit === '♦' ? 'red' : 'black'
+            const title = `4 карты ${option.suit}: ${option.summary.replace(/ · /g, ', ')}`
+            return (
+              <button
+                key={`early-${option.suit}`}
+                className="chip early-turn-chip"
+                disabled={disableEarlyTurn}
+                onClick={() => onRequestEarlyTurn?.(option.suit)}
+                title={title}
+                type="button"
+              >
+                <span className={`chip-suit ${suitClass}`}>{option.suit}</span>
+                <span className="combo-cards">{option.summary}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
