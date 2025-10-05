@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, PublicCard, TrickState, Suit } from '../types'
+import { isAllowedEarlyTurnCombo } from '../utils/earlyTurn'
 import CardView from './CardView'
 
 type DragPreview = { cards: Card[]; valid: boolean }
@@ -16,12 +17,12 @@ type Props = {
   isLocked?: boolean
   lockReason?: string
   canRequestEarlyTurn?: boolean
-  onRequestEarlyTurn?: (suit: Suit) => void
+  onRequestEarlyTurn?: (cards: Card[]) => void
 }
 
 const RANK_ORDER = [6, 7, 8, 9, 10, 11, 12, 13, 14]
 const FOUR_CARD_RULE_HINT =
-  'Допустимая четвёрка: одна масть или комбинации тузов и десяток (туз + 3×10, 2 туза + 2×10, 3 туза + 10, четыре туза, четыре десятки)'
+  'Допустимая четвёрка: 4 карты одной масти или комбинации тузов и десяток (туз + 3×10, 2 туза + 2×10, 3 туза + десятка, четыре туза)'
 
 function rankStrength(rank: number): number {
   return RANK_ORDER.indexOf(rank)
@@ -146,29 +147,11 @@ function suggestLeaderBest(cards: Card[]): number[] | null {
 }
 
 function isValidFourCombo(cards: Card[]): boolean {
-  if (cards.length !== 4) return false
-  const suitSet = new Set(cards.map(card => card.suit))
-  if (suitSet.size === 1) return true
-  const counts = cards.reduce<Map<number, number>>((map, card) => {
-    map.set(card.rank, (map.get(card.rank) ?? 0) + 1)
-    return map
-  }, new Map<number, number>())
-  const tens = counts.get(10) ?? 0
-  const aces = counts.get(14) ?? 0
-  const otherRanks = Array.from(counts.keys()).filter(rank => rank !== 10 && rank !== 14)
-  if (otherRanks.length > 0) return false
-  if (tens === 4 || aces === 4) return true
-  if (tens > 0 && aces > 0 && tens < 4 && aces < 4 && tens + aces === 4) return true
-  return false
+  return isAllowedEarlyTurnCombo(cards)
 }
 
 function isValidEarlyTurnSelection(cards: Card[]): boolean {
-  if (cards.length !== 4) return false
-  const suitSet = new Set(cards.map(card => card.suit))
-  if (suitSet.size !== 1) return false
-  const aceCount = cards.filter(card => card.rank === 14).length
-  const highCount = cards.filter(card => card.rank === 14 || card.rank === 10).length
-  return aceCount >= 1 && highCount >= 3
+  return isAllowedEarlyTurnCombo(cards)
 }
 
 function isVisibleCard(card: PublicCard): card is PublicCard & { suit: Suit; rank: number } {
@@ -336,8 +319,8 @@ export default function Hand({
       return
     }
     if (!isMyTurn) {
-      if (canTriggerEarlyTurn && selectedCards[0]) {
-        onRequestEarlyTurn?.(selectedCards[0].suit)
+      if (canTriggerEarlyTurn) {
+        onRequestEarlyTurn?.([...selectedCards])
         setAwaitingEarlyTurn(true)
         setError('Запрошен досрочный ход…')
       } else {

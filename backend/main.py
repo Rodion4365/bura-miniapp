@@ -242,18 +242,22 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                 else:
                     await broadcast_room(room_id)
             elif t == "request_early_turn":
-                suit = data.get("suit")
+                cards_payload = data.get("cards")
                 try:
-                    cards = room.request_early_turn(data["player_id"], suit, round_id=data.get("roundId"))
+                    cards = room.request_early_turn(
+                        data["player_id"], cards_payload or [], round_id=data.get("roundId")
+                    )
                 except ValueError as exc:
                     await ws.send_json({"type": "error", "error": str(exc)})
                 else:
+                    suits = {card.suit for card in cards}
+                    same_suit = suits.pop() if len(suits) == 1 else None
                     await hub.send_room_event(
                         room_id,
                         {
                             "type": "EARLY_TURN_GRANTED",
                             "playerId": data["player_id"],
-                            "suit": suit,
+                            "suit": same_suit,
                             "cardIds": [card.id for card in cards],
                             "ranks": [card.rank for card in cards],
                         },

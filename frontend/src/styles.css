@@ -299,6 +299,7 @@ body, .app{
 .chip .chip-suit{ font-weight:700; font-size:var(--font-sm); line-height:1; }
 .chip .chip-suit.red{ color:#d84c4c; }
 .chip .chip-suit.black{ color:var(--fg); }
+.chip .combo-label{ font-weight:700; font-size:var(--font-2xs); }
 .chip .combo-cards{ font-weight:600; letter-spacing:.02em; }
 
 @keyframes deal{

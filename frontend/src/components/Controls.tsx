@@ -8,13 +8,16 @@ type Props = {
   isBusy?: boolean
   earlyTurnOptions?: EarlyTurnOption[]
   canRequestEarlyTurn?: boolean
-  onRequestEarlyTurn?: (suit: Suit) => void
+  onRequestEarlyTurn?: (cards: Card[]) => void
 }
 
 type EarlyTurnOption = {
-  suit: Suit
+  id: string
   cards: Card[]
   summary: string
+  label: string
+  pattern: 'same_suit' | 'aces_tens'
+  suit?: Suit
 }
 
 const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string; hint: string }[] = [
@@ -65,17 +68,20 @@ export default function Controls({ state, onDeclare, isBusy, earlyTurnOptions, c
           <span className="combo-title">Досрочный ход:</span>
           {earlyOptions.map(option => {
             const suitClass = option.suit === '♥' || option.suit === '♦' ? 'red' : 'black'
-            const title = `4 карты ${option.suit}: ${option.summary.replace(/ · /g, ', ')}`
+            const title = `${option.label}: ${option.summary.replace(/ · /g, ', ')}`
             return (
               <button
-                key={`early-${option.suit}`}
+                key={`early-${option.id}`}
                 className="chip early-turn-chip"
                 disabled={disableEarlyTurn}
-                onClick={() => onRequestEarlyTurn?.(option.suit)}
+                onClick={() => onRequestEarlyTurn?.(option.cards)}
                 title={title}
                 type="button"
               >
-                <span className={`chip-suit ${suitClass}`}>{option.suit}</span>
+                {option.suit && option.pattern === 'same_suit' ? (
+                  <span className={`chip-suit ${suitClass}`}>{option.suit}</span>
+                ) : null}
+                <span className="combo-label">{option.label}</span>
                 <span className="combo-cards">{option.summary}</span>
               </button>
             )
