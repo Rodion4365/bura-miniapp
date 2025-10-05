@@ -129,16 +129,39 @@ export default function App(){
     sendAction({ type: 'declare', player_id: user.id, combo })
   }
 
-  useEffect(()=>{
-    if(!state?.turn_deadline_ts) return
-    setNow(Date.now())
-    const id = setInterval(()=> setNow(Date.now()), 1000)
-    return ()=> clearInterval(id)
+  useEffect(() => {
+    const deadline = state?.turn_deadline_ts
+    if (!deadline) {
+      setNow(Date.now())
+      return
+    }
+
+    const initial = Date.now()
+    setNow(initial)
+    if (initial / 1000 >= deadline) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      const current = Date.now()
+      setNow(current)
+      if (current / 1000 >= deadline) {
+        window.clearInterval(intervalId)
+      }
+    }, 500)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
   }, [state?.turn_deadline_ts])
 
-  const fallbackTimer = state?.turn_deadline_ts
-    ? Math.max(0, Math.ceil(state.turn_deadline_ts - now / 1000))
-    : undefined
+  const fallbackTimer = useMemo(() => {
+    const deadline = state?.turn_deadline_ts
+    if (!deadline) return undefined
+    const secondsLeft = deadline - now / 1000
+    if (secondsLeft <= 0) return 0
+    return Math.ceil(secondsLeft)
+  }, [state?.turn_deadline_ts, now])
 
   // рендер
   return (
