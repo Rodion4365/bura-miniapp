@@ -199,6 +199,37 @@ def test_penalties_and_round_summary():
     assert room.game_wins["A"] == 1
     assert room.game_wins["B"] == 0
 
+    totals = room._collect_player_totals()
+    by_id = {t.player_id: t for t in totals}
+    assert by_id["A"].score == 0
+    assert by_id["B"].score == 6
+    assert by_id["A"].points == 21
+    assert by_id["B"].points == 0
+
+
+def test_penalty_ranges():
+    room = make_room()
+    points = {"A": 48, "B": 17}
+    penalties, leaders = room._calculate_penalties(points)
+    assert leaders == ["A"]
+    assert penalties["A"] == 0
+    assert penalties["B"] == 4
+
+    points = {"A": 52, "B": 31}
+    penalties, leaders = room._calculate_penalties(points)
+    assert leaders == ["A"]
+    assert penalties["A"] == 0
+    assert penalties["B"] == 2
+
+
+def test_round_draw_no_penalties():
+    room = make_room()
+    points = {"A": 40, "B": 40}
+    penalties, leaders = room._calculate_penalties(points)
+    assert leaders == []
+    assert penalties["A"] == 0
+    assert penalties["B"] == 0
+
 
 def test_declare_combination():
     room = make_room()
