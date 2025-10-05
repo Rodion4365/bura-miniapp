@@ -33,7 +33,7 @@ export default function CreateTableForm({ headers, onCreated }: Props) {
   const summary = useMemo(() => {
     const discardLabel = DISCARD_OPTIONS.find(o => o.value === discardVisibility)?.title ?? ''
     return `Максимум игроков: ${maxPlayers} · ${discardLabel.toLowerCase()} · ` +
-      `${enableFourEnds ? 'Комбо «4 конца» включено' : 'Комбо «4 конца» отключено'} · ` +
+      `${enableFourEnds ? 'Доп. комбинация включена' : 'Доп. комбинация отключена'} · ` +
       `Таймер хода: ${turnTimeoutSec} с`
   }, [maxPlayers, discardVisibility, enableFourEnds, turnTimeoutSec])
 
@@ -65,7 +65,7 @@ export default function CreateTableForm({ headers, onCreated }: Props) {
         <input
           id="room-name"
           className="input"
-          placeholder="Например: Вечерняя Бура"
+          placeholder="Например: Вечерняя партия"
           value={roomName}
           onChange={e => setRoomName(e.target.value)}
         />
@@ -112,8 +112,8 @@ export default function CreateTableForm({ headers, onCreated }: Props) {
           </fieldset>
 
           <fieldset className="settings-card">
-            <legend>Комбинация «4 конца»</legend>
-            <p className="settings-note">Четыре десятки или четыре туза. Можно отключить, если хотите играть без неё.</p>
+            <legend>Дополнительная комбинация</legend>
+            <p className="settings-note">Четыре десятки или четыре туза. Можно отключить, если хотите играть без этого правила.</p>
             <label className="switch">
               <input
                 type="checkbox"

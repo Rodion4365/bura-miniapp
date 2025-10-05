@@ -20,11 +20,11 @@ type EarlyTurnOption = {
   suit?: Suit
 }
 
-const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string; hint: string }[] = [
-  { key: 'bura', label: 'Бура', hint: '4 козыря' },
-  { key: 'molodka', label: 'Молодка', hint: '4 карты одной масти' },
-  { key: 'moscow', label: 'Москва', hint: '3 туза с козырным' },
-  { key: 'four_ends', label: '4 конца', hint: '4 десятки или 4 туза' },
+const COMBOS: { key: 'bura'|'molodka'|'moscow'|'four_ends'; label: string }[] = [
+  { key: 'bura', label: '4 козыря' },
+  { key: 'molodka', label: '4 карты одной масти' },
+  { key: 'moscow', label: '3 туза и козырь' },
+  { key: 'four_ends', label: 'Четыре десятки или четыре туза' },
 ]
 
 export default function Controls({ state, onDeclare, isBusy, earlyTurnOptions, canRequestEarlyTurn, onRequestEarlyTurn }: Props){
@@ -48,14 +48,13 @@ export default function Controls({ state, onDeclare, isBusy, earlyTurnOptions, c
       </button>
 
       <div className="combo-panel">
-        <span className="combo-title">Комбинации:</span>
+        <span className="combo-title">Объявить:</span>
         {combos.map(combo => (
           <button
             key={combo.key}
             className="chip"
             disabled={!canDeclare}
             onClick={()=> onDeclare(combo.key)}
-            title={combo.hint}
             type="button"
           >
             {combo.label}
