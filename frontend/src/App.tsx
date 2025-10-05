@@ -345,11 +345,6 @@ export default function App(){
     setDragPreview(null)
   }
 
-  function onDeclare(combo: string){
-    if(!user || !roomId || !state) return
-    sendAction({ type: 'declare', player_id: user.id, combo })
-  }
-
   const handleRequestEarlyTurn = useCallback((cards: Card[]) => {
     if (!user || !roomId) return
     const payload: Record<string, unknown> = { type: 'request_early_turn', player_id: user.id, cards }
@@ -470,7 +465,6 @@ export default function App(){
             </div>
           <Controls
             state={state}
-            onDeclare={onDeclare}
             isBusy={countdownActive}
             earlyTurnOptions={earlyTurnOptions}
             canRequestEarlyTurn={canRequestEarlyTurn}
