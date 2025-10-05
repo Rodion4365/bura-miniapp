@@ -285,6 +285,8 @@ body, .app{
 
 .table-board{ position:relative; display:flex; flex-direction:column; gap:14px; border:1px dashed var(--border); border-radius:16px; padding:16px 12px; min-height:140px; background:color-mix(in srgb, var(--card) 85%, transparent); transition:border-color .2s ease, background .2s ease; }
 .table-board.drop-active{ border-color:color-mix(in srgb, var(--primary) 35%, var(--border)); background:color-mix(in srgb, var(--primary) 10%, var(--card)); }
+.table-board.frozen{ pointer-events:none; }
+.table-board.frozen::after{ content:''; position:absolute; inset:0; border-radius:inherit; background:rgba(0,0,0,0.05); pointer-events:none; }
 .board-row{ display:flex; gap:12px; justify-content:center; }
 .board-slot{ display:flex; flex-direction:column; gap:10px; align-items:center; }
 .slot-top,.slot-bottom{ min-height:var(--card-height); display:flex; align-items:center; justify-content:center; }
@@ -309,16 +311,21 @@ body, .app{
 /* ===== Hand ===== */
 .hand{display:grid;gap:12px;padding:12px;border:1px solid var(--border);border-radius:18px;background:var(--card);outline:none;transition:box-shadow .2s ease}
 .hand.dragging{box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 25%, transparent)}
+.hand.locked{opacity:.9}
 .hand-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .hand-hint{font-weight:700;font-size:var(--font-sm)}
 .hand-meta{display:flex;gap:8px;flex-wrap:wrap}
 .hand-feedback{font-size:var(--font-xs);color:var(--muted);min-height:18px}
 .hand-feedback.error{color:#d33;animation:shake .18s linear 2}
 @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
-.hand-cards{display:flex;flex-wrap:wrap;gap:10px}
-.hand-card{border:none;background:transparent;padding:0;cursor:pointer;position:relative;transition:transform .15s ease}
+.hand-cards{--hand-gap:8px;--hand-card-width:clamp(72px,calc((100% - 3 * var(--hand-gap)) / 4),84px);display:grid;grid-template-columns:repeat(4,minmax(0,var(--hand-card-width)));justify-content:center;gap:var(--hand-gap);padding:8px 0}
+@media (max-width: 340px){.hand-cards{--hand-gap:6px}}
+.hand-card{border:none;background:transparent;padding:0;cursor:pointer;position:relative;transition:transform .15s ease;width:var(--hand-card-width);justify-self:center}
 .hand-card.selected{transform:translateY(-8px)}
 .hand-card.incompatible{opacity:.4}
+.hand-card:disabled{cursor:not-allowed;opacity:.6}
+.hand-card:disabled .card-image{box-shadow:0 4px 10px rgba(0,0,0,0.12)}
+.hand-card .card-image{width:100%;height:calc(var(--hand-card-width) * 1.4375)}
 .hand-card:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
 .hand-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
 
