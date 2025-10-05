@@ -58,6 +58,13 @@ def test_partial_response_keeps_owner():
     assert room.taken_cards["A"] and len(room.taken_cards["A"]) == 4
 
 
+def test_ten_outranks_face_cards():
+    room = make_room()
+    assert room._beats(Card(suit="♠", rank=10), Card(suit="♠", rank=13))
+    assert room._beats(Card(suit="♠", rank=14), Card(suit="♠", rank=10))
+    assert not room._beats(Card(suit="♠", rank=13), Card(suit="♠", rank=10))
+
+
 def test_leader_can_throw_four_combo():
     room = make_room()
     room.hands["A"] = [
