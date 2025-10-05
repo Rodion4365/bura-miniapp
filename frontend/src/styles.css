@@ -554,8 +554,9 @@ body, .app{
 
 .hand-cards {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  overflow-x: auto;
+  justify-content: center;
   padding: 8px 2px;
 }
 
@@ -565,6 +566,7 @@ body, .app{
   padding: 0;
   border-radius: 14px;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
+  flex: 0 0 auto;
 }
 
 .hand-card.selected {

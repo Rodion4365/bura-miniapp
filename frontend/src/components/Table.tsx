@@ -125,11 +125,16 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
           <div className="players-list">
             {orderedPlayers.map(player => {
               const clock = state.tablePlayers?.find(entry => entry.playerId === player.id)
-              const timerValue = clock?.turnTimerSec ?? (clock?.isActive ? fallbackTimer : undefined)
+              const timerValue = clock?.isActive
+                ? typeof fallbackTimer === 'number'
+                  ? fallbackTimer
+                  : clock?.turnTimerSec
+                : undefined
+              const showTimer = typeof timerValue === 'number' && timerValue > 0
               return (
                 <div key={player.id} className={`table-player ${clock?.isActive ? 'active' : ''}`}>
                   <span className="player-name">{player.name}</span>
-                  {clock?.isActive && typeof timerValue === 'number' && (
+                  {clock?.isActive && showTimer && (
                     <span className="player-timer">{timerValue}s</span>
                   )}
                 </div>
