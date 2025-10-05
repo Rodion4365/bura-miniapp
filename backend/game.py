@@ -39,7 +39,10 @@ CARD_POINTS: Dict[int, int] = {
     11: 2,   # Jack
 }
 
-RANK_STRENGTH: Dict[int, int] = {rank: idx for idx, rank in enumerate(RANKS)}
+# Order from weakest to strongest following the game rules where the ten is
+# second only to the ace and trumps beat other suits.
+RANK_ORDER = [6, 7, 8, 9, 11, 12, 13, 10, 14]
+RANK_STRENGTH: Dict[int, int] = {rank: idx for idx, rank in enumerate(RANK_ORDER)}
 
 COMBINATION_NAMES = {
     "bura": "Бура",

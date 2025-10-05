@@ -1,6 +1,6 @@
 import type { Card, Suit } from '../types'
 
-const EARLY_RANK_ORDER = [14, 13, 12, 11, 10, 9, 8, 7, 6]
+const EARLY_RANK_ORDER = [14, 10, 13, 12, 11, 9, 8, 7, 6]
 const EARLY_RANK_LABEL: Record<number, string> = {
   6: '6',
   7: '7',
