@@ -246,7 +246,13 @@ body, .app{
 .hand{ display:grid; gap:12px; padding:12px; border:1px solid var(--border); border-radius:16px; background:var(--card); }
 .hand.deal-anim .hand-card{ animation: deal .35s ease both; }
 .hand-hint{ font-size:var(--font-2xs); color:var(--muted); }
-.hand-cards{ display:flex; flex-wrap:wrap; gap:8px; }
+.hand-cards{
+  display:grid;
+  grid-template-columns:repeat(4, var(--hand-card-width, 64px));
+  gap:var(--hand-gap, 6px);
+  justify-content:center;
+  padding:0 var(--hand-padding-x, 12px);
+}
 .hand-card{ border:none; background:none; padding:0; cursor:pointer; position:relative; }
 .hand-card.selected::after{
   content:'';
@@ -318,14 +324,37 @@ body, .app{
 .hand-feedback{font-size:var(--font-xs);color:var(--muted);min-height:18px}
 .hand-feedback.error{color:#d33;animation:shake .18s linear 2}
 @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
-.hand-cards{--hand-gap:8px;--hand-card-width:clamp(72px,calc((100% - 3 * var(--hand-gap)) / 4),84px);display:grid;grid-template-columns:repeat(4,minmax(0,var(--hand-card-width)));justify-content:center;gap:var(--hand-gap);padding:8px 0}
-@media (max-width: 340px){.hand-cards{--hand-gap:6px}}
-.hand-card{border:none;background:transparent;padding:0;cursor:pointer;position:relative;transition:transform .15s ease;width:var(--hand-card-width);justify-self:center}
+.hand-cards{
+  --hand-card-width: 64px;
+  --hand-gap: 6px;
+  --hand-padding-x: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, var(--hand-card-width));
+  justify-content: center;
+  gap: var(--hand-gap);
+  padding: 0 var(--hand-padding-x);
+}
+
+@media (max-width: 392px){
+  .hand-cards{
+    --hand-card-width: 60px;
+  }
+}
+
+@media (max-width: 375px){
+  .hand-cards{
+    --hand-card-width: 56px;
+    --hand-gap: 4px;
+    --hand-padding-x: 10px;
+  }
+}
+
+.hand-card{border:none;background:transparent;padding:0;cursor:pointer;position:relative;transition:transform .15s ease;width:var(--hand-card-width);aspect-ratio:3 / 5;justify-self:center;display:flex;align-items:stretch}
 .hand-card.selected{transform:translateY(-8px)}
 .hand-card.incompatible{opacity:.4}
 .hand-card:disabled{cursor:not-allowed;opacity:.6}
 .hand-card:disabled .card-image{box-shadow:0 4px 10px rgba(0,0,0,0.12)}
-.hand-card .card-image{width:100%;height:calc(var(--hand-card-width) * 1.4375)}
+.hand-card .card-image{width:100%;height:100%}
 .hand-card:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
 .hand-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
 
@@ -471,25 +500,35 @@ body, .app{
 }
 
 .lane {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  --table-card-width: 60px;
+  --table-card-gap: 6px;
+  --table-card-padding-x: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, var(--table-card-width));
+  gap: var(--table-card-gap);
+  justify-content: center;
+  justify-items: center;
+  padding: 0 var(--table-card-padding-x);
+  min-height: calc(var(--table-card-width) * 5 / 3);
+  position: relative;
 }
 
-.lane::-webkit-scrollbar {
-  height: 4px;
+@media (max-width: 392px) {
+  .lane {
+    --table-card-width: 56px;
+  }
 }
 
-.lane::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  background: color-mix(in srgb, var(--primary) 25%, transparent);
-  border-radius: 999px;
+@media (max-width: 375px) {
+  .lane {
+    --table-card-width: 52px;
+    --table-card-gap: 4px;
+    --table-card-padding-x: 10px;
+  }
 }
 
 .card-image {
-  width: 64px;
-  height: 92px;
+  --card-visual-width: 60px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
@@ -497,6 +536,24 @@ body, .app{
   flex: 0 0 auto;
   background: #f8f9ff;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
+  width: var(--card-visual-width);
+  aspect-ratio: 3 / 5;
+}
+
+.lane .card-image {
+  --card-visual-width: var(--table-card-width);
+}
+
+.lane-preview {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: inherit;
+  gap: inherit;
+  justify-content: inherit;
+  justify-items: inherit;
+  align-content: center;
+  pointer-events: none;
 }
 
 .card-image img {
@@ -560,20 +617,41 @@ body, .app{
 }
 
 .hand-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  --hand-card-width: 64px;
+  --hand-gap: 6px;
+  --hand-padding-x: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, var(--hand-card-width));
+  gap: var(--hand-gap);
   justify-content: center;
-  padding: 8px 2px;
+  padding: 0 var(--hand-padding-x);
+}
+
+@media (max-width: 392px) {
+  .hand-cards {
+    --hand-card-width: 60px;
+  }
+}
+
+@media (max-width: 375px) {
+  .hand-cards {
+    --hand-card-width: 56px;
+    --hand-gap: 4px;
+    --hand-padding-x: 10px;
+  }
 }
 
 .hand-card {
   border: none;
   background: transparent;
   padding: 0;
-  border-radius: 14px;
+  position: relative;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
-  flex: 0 0 auto;
+  width: var(--hand-card-width);
+  aspect-ratio: 3 / 5;
+  display: flex;
+  align-items: stretch;
+  justify-self: center;
 }
 
 .hand-card.selected {
@@ -583,6 +661,11 @@ body, .app{
 
 .hand-card.incompatible {
   opacity: 0.4;
+}
+
+.hand-card .card-image {
+  width: 100%;
+  height: 100%;
 }
 
 .hand-actions {
