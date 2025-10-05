@@ -480,9 +480,7 @@ export default function Hand({
     >
       <div className="hand-header">
         <div className="hand-hint">
-          {leaderMode
-            ? 'Вы лидер: сыграйте до трёх карт одной масти или допустимую четвёрку'
-            : `Ответьте набором из ${requiredCount} карт`}
+          {leaderMode ? null : `Ответьте набором из ${requiredCount} карт`}
         </div>
         <div className="hand-meta">
           {trick && (
