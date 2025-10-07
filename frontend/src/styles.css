@@ -326,6 +326,7 @@ body, .app{
 .settings-sub{ font-size:var(--font-2xs); color:var(--muted); }
 .settings-pills{ display:flex; flex-wrap:wrap; gap:8px; }
 .meta-chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:var(--card); font-size:var(--font-2xs); font-weight:600; }
+.meta-chip .meta-chip-suit-icon{ width:18px; height:18px; }
 .game-settings .controls{ padding-top:4px; }
 
 .game-table{ display:grid; gap:12px; padding:12px; border:1px solid var(--border); border-radius:18px; background:var(--card); box-shadow:0 10px 24px rgba(0,0,0,.12); }
