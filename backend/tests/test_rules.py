@@ -207,6 +207,27 @@ def test_penalties_and_round_summary():
     assert by_id["B"].points == 0
 
 
+def test_round_start_alternates_between_players():
+    variant = VARIANTS["classic_2p"]
+    room = Room("r", "Test", variant)
+    room.add_player(Player(id="A", name="A"))
+    room.add_player(Player(id="B", name="B"))
+
+    room.start()
+    first_player = room.current_player_id()
+
+    room._start_new_round(initial=False)
+    second_player = room.current_player_id()
+
+    assert {first_player, second_player} == {"A", "B"}
+    assert first_player != second_player
+
+    room._start_new_round(initial=False)
+    third_player = room.current_player_id()
+
+    assert third_player == first_player
+
+
 def test_penalty_ranges():
     room = make_room()
     points = {"A": 48, "B": 17}
