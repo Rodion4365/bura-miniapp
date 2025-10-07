@@ -7,6 +7,7 @@ import Controls from './components/Controls'
 import TableView from './components/Table'
 import Hand from './components/Hand'
 import ScoreBoard from './components/ScoreBoard'
+import MatchSummary from './components/MatchSummary'
 import { getState, verify } from './api'
 import type { GameState, Card, Suit } from './types'
 import {
@@ -22,7 +23,7 @@ import GameRules from './components/GameRules'
 
 declare global { interface Window { Telegram: any } }
 
-type Screen = 'menu' | 'create' | 'join' | 'room' | 'rules'
+type Screen = 'menu' | 'create' | 'join' | 'room' | 'rules' | 'match_result'
 
 type CountdownSource = 'board' | 'phase' | 'event'
 
@@ -262,7 +263,7 @@ export default function App(){
       playerId: user.id,
       onState: (next)=>{
         setState(next)
-        setScreen('room')
+        setScreen(next?.match_over ? 'match_result' : 'room')
       },
       onEvent: handleRoomEvent,
       pollIntervalMs: 3000,
@@ -282,6 +283,20 @@ export default function App(){
     }
     return ok
   }, [roomId, user?.id])
+
+  const handleExitMatch = useCallback(() => {
+    if (channelRef.current) {
+      channelRef.current.close()
+      channelRef.current = null
+    }
+    countdownSyncRef.current = false
+    setCountdownInfo(null)
+    setDragPreview(null)
+    setPlayStamp(0)
+    setRoomId(undefined)
+    setState(undefined)
+    setScreen('menu')
+  }, [])
 
   const earlyTurnOptions = useMemo<EarlyTurnOption[]>(() => {
     const hand = state?.hands?.filter(card => Boolean(card)) as Card[] | undefined
@@ -448,6 +463,10 @@ export default function App(){
           <GameRules />
           <button className="link-btn" onClick={()=> setScreen('menu')}>← Назад</button>
         </div>
+      )}
+
+      {screen === 'match_result' && state && (
+        <MatchSummary state={state} meId={user?.id} onExit={handleExitMatch} />
       )}
 
       {screen === 'room' && state && (

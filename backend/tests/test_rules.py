@@ -207,6 +207,28 @@ def test_penalties_and_round_summary():
     assert by_id["B"].points == 0
 
 
+def test_match_finishes_when_penalties_reach_twelve():
+    room = make_room()
+    room.scores = {"A": 0, "B": 8}
+    room.taken_cards = {
+        "A": [Card(suit="♠", rank=14), Card(suit="♠", rank=10)],
+        "B": [],
+    }
+    room.round_active = True
+
+    points = room._calculate_round_result()
+    penalties, leaders = room._calculate_penalties(points)
+    room._finalize_round(penalties, leaders)
+
+    assert room.match_over is True
+    assert room.scores["B"] == 14
+    assert room.losers == ["B"]
+    assert room.winners == ["A"]
+    assert room.winner_id == "A"
+    assert room.pending_round_start is False
+    assert room.started is False
+
+
 def test_round_start_alternates_between_players():
     variant = VARIANTS["classic_2p"]
     room = Room("r", "Test", variant)
