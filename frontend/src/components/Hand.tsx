@@ -486,7 +486,6 @@ export default function Hand({
           {trick && (
             <>
               <span className="pill">Нужно: {trick.required_count}</span>
-              <span className="pill">Беру: {ownerLabel}</span>
             </>
           )}
         </div>
