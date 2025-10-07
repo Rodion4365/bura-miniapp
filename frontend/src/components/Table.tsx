@@ -148,7 +148,7 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
       <header className="table-header">
         <div className="table-meta-left">
           <span className="meta-chip">Раунд {state.round_number ?? 1}</span>
-          <span className="meta-chip">
+          <span className="meta-chip meta-chip-trump">
             Козырь
             {state.trump_card ? (
               <SuitIcon suit={state.trump_card.suit} className="meta-chip-suit-icon" size={18} />
