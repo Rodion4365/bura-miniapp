@@ -186,6 +186,8 @@ class Room:
 
         self.scores: Dict[str, int] = {}
         self.game_wins: Dict[str, int] = {}
+        self.current_round_start_idx: Optional[int] = None
+        self.next_round_start_idx: Optional[int] = None
 
     # ------------------------------------------------------------------
     # Lobby management
@@ -238,6 +240,8 @@ class Room:
         self.dealer_idx = random.randrange(len(self.players))
         self.round_number = 0
         self.game_wins = {p.id: 0 for p in self.players}
+        self.current_round_start_idx = None
+        self.next_round_start_idx = None
         self._start_new_round(initial=True)
 
     def _start_new_round(self, *, initial: bool):
@@ -264,15 +268,24 @@ class Room:
         self.pending_turn_resume = False
         self.pending_round_start = False
 
+        total_players = len(self.players)
+
         for _ in range(4):
             for pl in self.players:
                 if self.deck:
                     self.hands[pl.id].append(self.deck.pop(0))
 
-        if initial or not self.last_trick_winner_id:
-            self.turn_idx = (self.dealer_idx + 1) % len(self.players)
+        if self.next_round_start_idx is None:
+            if initial:
+                start_idx = (self.dealer_idx + 1) % total_players
+            else:
+                start_idx = 0
         else:
-            self.turn_idx = self._player_index(self.last_trick_winner_id)
+            start_idx = self.next_round_start_idx % total_players
+
+        self.current_round_start_idx = start_idx
+        self.next_round_start_idx = (start_idx + 1) % total_players
+        self.turn_idx = start_idx
         self._refresh_deadline()
 
     # ------------------------------------------------------------------
