@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { Card, CardColor, GameState, Player, Suit, TrickState } from '../types'
 import CardView from './CardView'
+import SuitIcon from './SuitIcon'
 
 type DragPreview = { cards: Card[]; valid: boolean } | null
 
@@ -147,7 +148,14 @@ export default function TableView({ state, meId, dragPreview, onDropPlay, cardAs
       <header className="table-header">
         <div className="table-meta-left">
           <span className="meta-chip">Раунд {state.round_number ?? 1}</span>
-          <span className="meta-chip">Козырь {state.trump_card ? state.trump_card.suit : '—'}</span>
+          <span className="meta-chip">
+            Козырь
+            {state.trump_card ? (
+              <SuitIcon suit={state.trump_card.suit} className="meta-chip-suit-icon" size={18} />
+            ) : (
+              '—'
+            )}
+          </span>
           <span className="meta-chip">Осталось карт: {state.deck_count}</span>
         </div>
         <div className="table-meta-right">
