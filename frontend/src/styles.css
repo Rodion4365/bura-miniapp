@@ -144,6 +144,17 @@ body, .app{
 .rules h3{ margin:0; font-size:var(--font-md); font-weight:700; }
 .rules ul{ margin:0; padding-left:18px; display:grid; gap:4px; }
 
+/* ======= MATCH SUMMARY ======= */
+.match-summary-screen{ min-height: calc(var(--app-vh-stable, 100vh) - 32px); display:flex; align-items:center; justify-content:center; padding:24px; }
+.match-summary-card{ width:min(100%, 420px); display:grid; gap:18px; padding:24px; border-radius:20px; background:var(--card); border:1px solid var(--border); box-shadow:0 12px 32px rgba(0,0,0,.18); text-align:center; }
+.match-summary-head{ display:grid; gap:6px; }
+.match-summary-title{ margin:0; font-size:var(--font-3xl); font-weight:800; }
+.match-summary-subtitle{ margin:0; font-size:var(--font-xl); font-weight:700; }
+.match-summary-score{ margin-top:6px; font-size:var(--font-lg); font-weight:700; }
+.match-summary-note{ margin:8px 0 0; font-size:var(--font-xs); color:var(--muted); }
+.match-summary-action{ justify-self:center; padding:12px 18px; font-size:var(--font-md); border-radius:14px; }
+.match-summary-table{ display:grid; }
+
 /* ======= LOBBY ======= */
 .lobby-wrap{ display:grid; gap: 12px; }
 .lobby-toolbar{ display:flex; gap: 8px; align-items:center; }
