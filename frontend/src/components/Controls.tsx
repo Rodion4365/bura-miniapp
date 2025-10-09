@@ -21,16 +21,24 @@ type EarlyTurnOption = {
 
 export default function Controls({ state, isBusy, earlyTurnOptions, canRequestEarlyTurn, onRequestEarlyTurn }: Props){
   const requiredPlayers = state?.config?.maxPlayers ?? state?.variant?.players_min ?? 2
-  const canStart = !!state && !state.started && state.players.length >= requiredPlayers
+  const playersCount = state?.players.length ?? 0
+  const isTableFull = !!state && !state.started && playersCount >= requiredPlayers
+  const canStart = isTableFull && !isBusy
   const trickIndex = state?.trick_index ?? 0
   const earlyOptions = earlyTurnOptions ?? []
   const disableEarlyTurn = Boolean(isBusy || !canRequestEarlyTurn || !onRequestEarlyTurn)
 
+  const startButtonClassName = [
+    'button',
+    'start-button',
+    isTableFull ? 'start-button--ready' : 'start-button--waiting',
+  ].join(' ')
+
   return (
     <div className="controls">
       <button
-        className="button"
-        disabled={!canStart || isBusy}
+        className={startButtonClassName}
+        disabled={!canStart}
         onClick={()=> state?.room_id && startGame(state.room_id)}
         type="button"
       >
