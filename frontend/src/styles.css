@@ -176,6 +176,31 @@ body, .app{
   padding:10px 12px; border-radius: 10px; border:1px solid var(--border); background: var(--card); color: var(--fg); font-weight: 700;
 }
 .button.primary{ background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+.start-button{
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.start-button--waiting{
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.75;
+}
+.start-button--waiting:disabled{
+  cursor: default;
+}
+.start-button--ready{
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.start-button--ready:hover{
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+.start-button--ready:active{
+  transform: translateY(0);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
 .create-form{ display:grid; gap:16px; }
 .settings-section{ display:grid; gap:12px; }
 .section-title{ margin:0; font-size:var(--font-lg); font-weight:800; }
