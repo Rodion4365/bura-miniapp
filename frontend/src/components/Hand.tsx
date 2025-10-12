@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card, PublicCard, TrickState, Suit } from '../types'
-import { isAllowedEarlyTurnCombo } from '../utils/earlyTurn'
+import { describeEarlyTurnCombo, isAllowedEarlyTurnCombo } from '../utils/earlyTurn'
 import CardView from './CardView'
 
 type DragPreview = { cards: Card[]; valid: boolean }
@@ -23,6 +23,7 @@ type Props = {
 const RANK_ORDER = [6, 7, 8, 9, 10, 11, 12, 13, 14]
 const FOUR_CARD_RULE_HINT =
   'Допустимая четвёрка: 4 карты одной масти или комбинации тузов и десяток (туз + 3×10, 2 туза + 2×10, 3 туза + десятка, четыре туза)'
+const EARLY_SUIT_ORDER: Suit[] = ['♠', '♥', '♦', '♣']
 
 function rankStrength(rank: number): number {
   return RANK_ORDER.indexOf(rank)
@@ -152,6 +153,56 @@ function isValidFourCombo(cards: Card[]): boolean {
 
 function isValidEarlyTurnSelection(cards: Card[]): boolean {
   return isAllowedEarlyTurnCombo(cards)
+}
+
+type EarlyTurnSuggestion = {
+  indexes: number[]
+  pattern: 'same_suit' | 'aces_tens'
+  suit?: Suit
+  aces: number
+  tens: number
+}
+
+function sortEarlyTurnSuggestions(a: EarlyTurnSuggestion, b: EarlyTurnSuggestion): number {
+  if (a.pattern !== b.pattern) return a.pattern === 'same_suit' ? -1 : 1
+  if (a.pattern === 'same_suit' && b.pattern === 'same_suit') {
+    const orderA = a.suit ? EARLY_SUIT_ORDER.indexOf(a.suit) : EARLY_SUIT_ORDER.length
+    const orderB = b.suit ? EARLY_SUIT_ORDER.indexOf(b.suit) : EARLY_SUIT_ORDER.length
+    return orderA - orderB
+  }
+  if (a.aces !== b.aces) return b.aces - a.aces
+  if (a.tens !== b.tens) return b.tens - a.tens
+  return 0
+}
+
+function suggestEarlyTurnComboIndexes(cards: Card[], baseIndex?: number): number[] | null {
+  if (cards.length < 4) return null
+  const combos = combinations(cards.length, 4)
+  const suggestions: EarlyTurnSuggestion[] = []
+
+  combos.forEach(indexes => {
+    const sample = indexes.map(idx => cards[idx])
+    if (!isAllowedEarlyTurnCombo(sample)) return
+    const description = describeEarlyTurnCombo(sample)
+    suggestions.push({
+      indexes,
+      pattern: description.pattern,
+      suit: description.suit,
+      aces: description.aces,
+      tens: description.tens,
+    })
+  })
+
+  if (suggestions.length === 0) return null
+
+  const sorted = [...suggestions].sort(sortEarlyTurnSuggestions)
+
+  if (baseIndex !== undefined) {
+    const withBase = sorted.find(entry => entry.indexes.includes(baseIndex))
+    if (withBase) return [...withBase.indexes].sort((a, b) => a - b)
+  }
+
+  return [...sorted[0].indexes].sort((a, b) => a - b)
 }
 
 function isVisibleCard(card: PublicCard): card is PublicCard & { suit: Suit; rank: number } {
@@ -349,10 +400,15 @@ export default function Hand({
     if (isLocked) return
     let suggestion: number[] | null = null
     if (leaderMode) {
-      if (baseIndex !== undefined) {
-        suggestion = suggestLeaderFromIndex(cards, baseIndex)
-      } else {
-        suggestion = suggestLeaderBest(cards)
+      if (canRequestEarlyTurn && !isMyTurn) {
+        suggestion = suggestEarlyTurnComboIndexes(cards, baseIndex)
+      }
+      if (!suggestion) {
+        if (baseIndex !== undefined) {
+          suggestion = suggestLeaderFromIndex(cards, baseIndex)
+        } else {
+          suggestion = suggestLeaderBest(cards)
+        }
       }
     } else if (requiredCount) {
       suggestion = suggestResponseIndexes(cards, ownerCards, requiredCount, trump)
