@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.api.auth import router as telegram_auth_router
+from app.api.calls import router as calls_router
 from app.database import init_db
 from models import CreateGameRequest, JoinGameRequest, Player, GameVariant, TableConfig
 from game import ROOMS, Room, list_variants, VARIANTS, list_rooms_summary
@@ -46,6 +47,7 @@ app.add_middleware(
 print("[CORS] allow_origins:", ALLOWED_ORIGINS)
 
 app.include_router(telegram_auth_router)
+app.include_router(calls_router)
 
 
 @app.on_event("startup")
