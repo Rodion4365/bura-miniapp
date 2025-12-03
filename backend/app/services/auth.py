@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from contextlib import AbstractAsyncContextManager, aclosing
+from contextlib import AbstractAsyncContextManager
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,15 +10,9 @@ from app.models import User
 from app.schemas import TelegramUser
 
 
-async def _unwrap_session(
-    session: AsyncSession | AsyncGenerator[AsyncSession, None] | AbstractAsyncContextManager,
-) -> AsyncGenerator[AsyncSession, None]:
+async def _unwrap_session(session: AsyncSession | AbstractAsyncContextManager) -> AsyncGenerator[AsyncSession, None]:
     if isinstance(session, AsyncSession):
         yield session
-    elif isinstance(session, AsyncGenerator):
-        async with aclosing(session) as session_generator:
-            real_session = await anext(session_generator)
-            yield real_session
     else:
         async with session as real_session:  # type: ignore[func-returns-value]
             yield real_session
