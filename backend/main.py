@@ -17,8 +17,6 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.api.auth import router as telegram_auth_router
-from app.database import init_db
 from models import CreateGameRequest, JoinGameRequest, Player, GameVariant, TableConfig
 from game import ROOMS, Room, list_variants, VARIANTS, list_rooms_summary
 from auth import verify_init_data
@@ -44,13 +42,6 @@ app.add_middleware(
 )
 
 print("[CORS] allow_origins:", ALLOWED_ORIGINS)
-
-app.include_router(telegram_auth_router)
-
-
-@app.on_event("startup")
-async def _prepare_db() -> None:
-    await init_db()
 
 # ---------- API models ----------
 class VerifyResult(BaseModel):
