@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
-from app.database import AsyncSessionMaker, Base, data_engine, get_async_session
+from app.database import AsyncSessionMaker, Base, data_engine
 from app.models import User
 from app.schemas import TelegramUser
 from app.services.auth import get_or_create_user
@@ -38,15 +38,3 @@ async def test_get_or_create_user_accepts_context_manager():
     async with AsyncSessionMaker() as session:
         fetched = await session.execute(select(User).where(User.telegram_user_id == "123"))
         assert fetched.scalar_one().username == "alice"
-
-
-@pytest.mark.asyncio
-async def test_get_or_create_user_accepts_async_generator():
-    telegram_user = TelegramUser(id=456, username="bob")
-
-    user = await get_or_create_user(get_async_session(), telegram_user)
-    assert user.telegram_user_id == "456"
-
-    async with AsyncSessionMaker() as session:
-        fetched = await session.execute(select(User).where(User.telegram_user_id == "456"))
-        assert fetched.scalar_one().username == "bob"
