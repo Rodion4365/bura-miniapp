@@ -18,8 +18,12 @@ export default function RoomsList({ onJoin, headers }:{
     const urlBase = import.meta.env.VITE_WS_BASE || 'ws://localhost:8000'
     const ws = new WebSocket(`${urlBase}/ws/lobby`)
     ws.onmessage = (ev)=>{
-      const msg = JSON.parse(ev.data)
-      if(msg.type==='rooms') setRooms(msg.payload)
+      try {
+        const msg = JSON.parse(ev.data)
+        if(msg.type==='rooms') setRooms(msg.payload)
+      } catch (err) {
+        console.error('[RoomsList] Failed to parse WebSocket message:', err)
+      }
     }
     return ()=>ws.close()
   },[])

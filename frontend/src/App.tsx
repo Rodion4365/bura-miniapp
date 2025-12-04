@@ -124,7 +124,7 @@ export default function App(){
     webApp?.expand?.()
   }, [])
 
-  const handleRoomEvent = useCallback((evt: any) => {
+  const handleRoomEvent = useCallback((evt: Record<string, unknown>) => {
     if (!evt) return
     const eventType = typeof evt.event === 'string' ? evt.event : typeof evt.type === 'string' ? evt.type : undefined
     if (!eventType || eventType === 'state') return
@@ -219,9 +219,10 @@ export default function App(){
   // Тема
   useEffect(() => {
     applyThemeOnce()
-    watchTelegramTheme()
+    const disposeTheme = watchTelegramTheme()
     const disposeViewport = initViewportSizing()
     return () => {
+      disposeTheme?.()
       disposeViewport?.()
     }
   }, [])
@@ -237,12 +238,20 @@ export default function App(){
         setUser({ id: u.user_id, name: u.name, avatar: u.avatar_url })
         setHeaders({ 'x-user-id': u.user_id, 'x-user-name': encodeURIComponent(u.name), 'x-user-avatar': u.avatar_url || '' })
       } catch (err) {
-        console.error('Auth failed, fallback to guest:', err)
+        console.error('Auth failed, fallback to guest mode:', err)
+        // ВАЖНО: initDataUnsafe может быть подделан на клиенте!
+        // Гостевой режим используется только для локальной разработки/тестирования
         const unsafe = tg?.initDataUnsafe?.user
-        const id = unsafe?.id ? String(unsafe.id) : 'guest'
-        const name = unsafe?.first_name || 'Guest'
+        const id = unsafe?.id ? `guest_${unsafe.id}` : `guest_${Date.now()}`
+        const name = unsafe?.first_name ? `${unsafe.first_name} (не верифицирован)` : 'Гость'
+        console.warn('[Security] User is in GUEST mode - data is NOT verified!')
         setUser({ id, name })
-        setHeaders({ 'x-user-id': id, 'x-user-name': encodeURIComponent(name), 'x-user-avatar': '' })
+        setHeaders({
+          'x-user-id': id,
+          'x-user-name': encodeURIComponent(name),
+          'x-user-avatar': '',
+          'x-guest-mode': 'true'  // Явно помечаем гостевой режим
+        })
       } finally {
         tg?.ready?.()
       }
@@ -285,7 +294,9 @@ export default function App(){
     if (!channelRef.current) return false
     const ok = channelRef.current.send(message)
     if (!ok && roomId && user){
-      getState(roomId, user.id).then(setState).catch(()=>{})
+      getState(roomId, user.id).then(setState).catch((err) => {
+        console.error('[App] Failed to fetch state after send failure:', err)
+      })
     }
     return ok
   }, [roomId, user?.id])
@@ -426,7 +437,9 @@ export default function App(){
     if (!roomId || !user) return
     if (typeof countdownSecondsFloat === 'number' && countdownSecondsFloat <= 0 && !countdownSyncRef.current) {
       countdownSyncRef.current = true
-      getState(roomId, user.id).then(setState).catch(() => {})
+      getState(roomId, user.id).then(setState).catch((err) => {
+        console.error('[App] Failed to sync state after countdown:', err)
+      })
     }
   }, [countdownInfo, countdownSecondsFloat, roomId, user?.id])
 

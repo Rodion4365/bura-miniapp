@@ -96,11 +96,20 @@ export function applyThemeOnce() {
   applyContrast(themeParams, effective)
 }
 
-export function watchTelegramTheme() {
+export function watchTelegramTheme(): (() => void) | undefined {
   const tg = window.Telegram?.WebApp
+  const handler = () => applyThemeOnce()
+
   // реакция на смену темы в Телеге
-  tg?.onEvent?.('themeChanged', () => applyThemeOnce())
+  tg?.onEvent?.('themeChanged', handler)
+
   // реакция на системную тему
   const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
-  mq?.addEventListener?.('change', () => applyThemeOnce())
+  mq?.addEventListener?.('change', handler)
+
+  // Возвращаем cleanup функцию
+  return () => {
+    tg?.offEvent?.('themeChanged', handler)
+    mq?.removeEventListener?.('change', handler)
+  }
 }

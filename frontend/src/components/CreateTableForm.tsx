@@ -49,10 +49,11 @@ export default function CreateTableForm({ headers, onCreated }: Props) {
     try {
       const id = await createGame(roomName.trim(), config, headers)
       onCreated(id)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to create table', e)
-      setError(e?.message || 'Не удалось создать стол')
-      alert(e?.message || 'Не удалось создать стол')
+      const errorMessage = e instanceof Error ? e.message : 'Не удалось создать стол'
+      setError(errorMessage)
+      alert(errorMessage)
     } finally {
       setLoading(false)
     }

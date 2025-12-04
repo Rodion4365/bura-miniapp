@@ -7,7 +7,14 @@ export default function MyRooms({ onJoin }:{ onJoin:(roomId:string)=>void }){
   useEffect(()=>{
     const base = import.meta.env.VITE_WS_BASE || (location.origin.replace(/^http/,'ws'))
     const ws = new WebSocket(`${base}/ws/lobby`)
-    ws.onmessage = (ev)=>{ const m = JSON.parse(ev.data); if(m.type==='rooms') setRooms(m.payload) }
+    ws.onmessage = (ev)=>{
+      try {
+        const m = JSON.parse(ev.data)
+        if(m.type==='rooms') setRooms(m.payload)
+      } catch (err) {
+        console.error('[MyRooms] Failed to parse WebSocket message:', err)
+      }
+    }
     return ()=>ws.close()
   },[])
   const mine = rooms.filter(r=>my.includes(r.room_id))
