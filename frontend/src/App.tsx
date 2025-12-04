@@ -20,6 +20,7 @@ import { applyThemeOnce, watchTelegramTheme } from './theme'
 import { initViewportSizing } from './viewport'
 import { createRoomChannel, type RoomChannel } from './room-channel'
 import GameRules from './components/GameRules'
+import { useVoiceChat, type VoiceChatApi } from './utils/voice'
 
 declare global { interface Window { Telegram: any } }
 
@@ -111,6 +112,7 @@ export default function App(){
   const [countdownInfo, setCountdownInfo] = useState<CountdownInfo | null>(null)
   const [countdownNow, setCountdownNow] = useState(() => Date.now())
   const channelRef = useRef<RoomChannel | null>(null)
+  const voiceChatRef = useRef<VoiceChatApi | null>(null)
   const countdownSyncRef = useRef(false)
   const cardAssets = useMemo(() => {
     const map = new Map<string, Card>()
@@ -122,6 +124,11 @@ export default function App(){
     if (!evt) return
     const eventType = typeof evt.event === 'string' ? evt.event : typeof evt.type === 'string' ? evt.type : undefined
     if (!eventType || eventType === 'state') return
+
+    if (eventType === 'RTC_SIGNAL') {
+      voiceChatRef.current?.handleSignal(evt)
+      return
+    }
 
     if (eventType === 'TRICK_RESOLVED') {
       const payload = (evt.payload ?? evt.data ?? {}) as Record<string, unknown>
@@ -283,6 +290,17 @@ export default function App(){
     }
     return ok
   }, [roomId, user?.id])
+
+  const voiceChat = useVoiceChat({
+    roomId,
+    meId: user?.id,
+    players: state?.players,
+    sendSignal: sendAction,
+  })
+
+  useEffect(() => {
+    voiceChatRef.current = voiceChat
+  }, [voiceChat])
 
   const handleExitMatch = useCallback(() => {
     if (channelRef.current) {

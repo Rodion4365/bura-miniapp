@@ -180,6 +180,19 @@ class Hub:
             except RuntimeError:
                 pass
 
+    async def forward_signal(self, room_id: str, sender_ws: WebSocket, message: dict, target_id: Optional[str] = None):
+        for ws in list(self.rooms.get(room_id, [])):
+            if ws is sender_ws:
+                continue
+            if target_id:
+                pid = self.ws_player.get(ws)
+                if pid and pid != target_id:
+                    continue
+            try:
+                await ws.send_json(message)
+            except RuntimeError:
+                pass
+
     async def send_lobby(self, message: dict):
         for ws in list(self.lobby):
             try:
@@ -263,6 +276,16 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                         },
                     )
                     await broadcast_room(room_id)
+            elif t == "rtc_signal":
+                signal = data.get("signal")
+                target_id = data.get("targetId") or data.get("target_id")
+                payload = {
+                    "type": "RTC_SIGNAL",
+                    "from": data.get("player_id"),
+                    "signal": signal,
+                    "targetId": target_id,
+                }
+                await hub.forward_signal(room_id, ws, payload, target_id)
     except WebSocketDisconnect:
         await hub.disconnect(ws)
 
