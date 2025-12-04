@@ -31,8 +31,12 @@ export default function Lobby({
     const ws = new WebSocket(`${wsBase}/ws/lobby`)
     wsRef.current = ws
     ws.onmessage = (ev)=>{
-      const m = JSON.parse(ev.data)
-      if (m.type === 'rooms') setRooms(m.payload)
+      try {
+        const m = JSON.parse(ev.data)
+        if (m.type === 'rooms') setRooms(m.payload)
+      } catch (err) {
+        console.error('[Lobby] Failed to parse WebSocket message:', err)
+      }
     }
     ws.onerror = () => {/* игнорим */}
     return ()=> ws.close()
@@ -47,7 +51,11 @@ export default function Lobby({
         const res = await fetch(`${apiBase}/api/rooms`, { cache: 'no-store' })
         const data: RoomRow[] = await res.json()
         if (!stop) setRooms(data)
-      } finally { setLoading(false) }
+      } catch (err) {
+        console.error('[Lobby] Failed to fetch rooms:', err)
+      } finally {
+        setLoading(false)
+      }
     }
     pull()
     const id = setInterval(pull, 10000) // каждые 10с
@@ -65,18 +73,27 @@ export default function Lobby({
       const res = await fetch(`${apiBase}/api/rooms`, { cache: 'no-store' })
       const data: RoomRow[] = await res.json()
       setRooms(data)
-    } finally { setLoading(false) }
+    } catch (err) {
+      console.error('[Lobby] Failed to refresh rooms:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function join(room_id: string) {
-    const res = await fetch(`${apiBase}/api/game/join`, {
-      method: 'POST',
-      headers: { 'content-type':'application/json', ...headers },
-      body: JSON.stringify({ room_id })
-    })
-    const data = await res.json()
-    if (data?.ok) onJoined(room_id)
-    else alert(data?.error || 'Не удалось присоединиться')
+    try {
+      const res = await fetch(`${apiBase}/api/game/join`, {
+        method: 'POST',
+        headers: { 'content-type':'application/json', ...headers },
+        body: JSON.stringify({ room_id })
+      })
+      const data = await res.json()
+      if (data?.ok) onJoined(room_id)
+      else alert(data?.error || 'Не удалось присоединиться')
+    } catch (err) {
+      console.error('[Lobby] Failed to join room:', err)
+      alert('Ошибка при подключении к комнате')
+    }
   }
 
   const canShow = useMemo(()=>visibleRooms(rooms), [rooms])

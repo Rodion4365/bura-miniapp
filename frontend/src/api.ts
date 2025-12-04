@@ -7,7 +7,7 @@ export type TableConfig = {
   turnTimeoutSec: 30 | 40 | 50 | 60
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || ""
+const API_BASE = import.meta.env.VITE_API_BASE || window.location.origin
 
 /** Создание игры */
 export async function createGame(

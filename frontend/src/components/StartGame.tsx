@@ -8,7 +8,7 @@ export default function StartGame({
 }:{
   roomId: string
   canStart: boolean
-  afterStart: (st:any)=>void
+  afterStart: (st: Record<string, unknown>) => void
 }) {
   const [loading, setLoading] = useState(false)
   async function onClick() {
@@ -18,8 +18,9 @@ export default function StartGame({
       await startGame(roomId)
       const st = await getState(roomId)
       afterStart(st)
-    } catch (e:any){
-      alert(e?.message || 'Не удалось стартовать')
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Не удалось стартовать'
+      alert(errorMessage)
     } finally { setLoading(false) }
   }
   return (

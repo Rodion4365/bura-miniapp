@@ -5,8 +5,9 @@
  */
 import { getState } from './api'
 
-type Listener = (state: any) => void
-type EventListener = (event: any) => void
+type GameState = Record<string, unknown>
+type Listener = (state: GameState) => void
+type EventListener = (event: Record<string, unknown>) => void
 
 export type RoomChannel = {
   /** Завершить работу канала и закрыть WebSocket */
@@ -33,8 +34,9 @@ export function createRoomChannel(opts: {
   let ws: WebSocket | null = null
   let closed = false
   let reconnectAttempts = 0
-  let pollTimer: any = null
-  let pingTimer: any = null
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  let pingTimer: ReturnType<typeof setInterval> | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   const url = `${wsBase.replace(/\/$/,'')}/ws/${roomId}?player_id=${encodeURIComponent(playerId)}`
 
@@ -44,23 +46,35 @@ export function createRoomChannel(opts: {
       try {
         const st = await getState(roomId, playerId)
         onState(st)
-      } catch (_) {}
+      } catch (err) {
+        console.error('[RoomChannel] Polling failed:', err)
+      }
     }, pollInterval)
   }
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
+  function stopReconnect() { if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null } }
 
   function startPing() {
     stopPing()
     pingTimer = setInterval(() => {
-      try { ws?.send?.(JSON.stringify({ type: 'ping' })) } catch (_) {}
+      try {
+        ws?.send?.(JSON.stringify({ type: 'ping' }))
+      } catch (err) {
+        console.error('[RoomChannel] Ping failed:', err)
+      }
     }, 20000)
   }
   function stopPing() { if (pingTimer) { clearInterval(pingTimer); pingTimer = null } }
 
   function connect() {
     if (closed) return
-    try { ws = new WebSocket(url) } catch (_) {
-      startPolling(); scheduleReconnect(); return
+    try {
+      ws = new WebSocket(url)
+    } catch (err) {
+      console.error('[RoomChannel] WebSocket connection failed:', err)
+      startPolling()
+      scheduleReconnect()
+      return
     }
     ws.onopen = () => { reconnectAttempts = 0; stopPolling(); startPing() }
     ws.onmessage = (ev) => {
@@ -71,20 +85,30 @@ export function createRoomChannel(opts: {
         } else if (typeof msg?.type === 'string') {
           onEvent?.(msg)
         }
-      } catch (_) {}
+      } catch (err) {
+        console.error('[RoomChannel] Failed to parse WebSocket message:', err)
+      }
     }
     ws.onclose = () => { stopPing(); startPolling(); scheduleReconnect() }
     ws.onerror = () => { startPolling(); scheduleReconnect() }
   }
   function scheduleReconnect() {
     if (closed) return
+    stopReconnect()  // Очищаем предыдущий таймер
     reconnectAttempts++
-    const delay = Math.min(8000, 500 * 2 ** reconnectAttempts)
-    setTimeout(() => { if (!closed) connect() }, delay)
+    // Ограничиваем reconnectAttempts, чтобы избежать overflow в 2 ** reconnectAttempts
+    const safeAttempts = Math.min(reconnectAttempts, 13)
+    const delay = Math.min(8000, 500 * 2 ** safeAttempts)
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      if (!closed) connect()
+    }, delay)
   }
 
   connect()
-  getState(roomId, playerId).then(onState).catch(()=>{})
+  getState(roomId, playerId).then(onState).catch((err) => {
+    console.error('[RoomChannel] Initial state fetch failed:', err)
+  })
 
   function trySend(message: unknown): boolean {
     if (!ws || ws.readyState !== WebSocket.OPEN) return false
@@ -92,7 +116,8 @@ export function createRoomChannel(opts: {
       if (typeof message === 'string') ws.send(message)
       else ws.send(JSON.stringify(message))
       return true
-    } catch (_) {
+    } catch (err) {
+      console.error('[RoomChannel] Failed to send message:', err)
       return false
     }
   }
@@ -102,7 +127,12 @@ export function createRoomChannel(opts: {
       closed = true
       stopPolling()
       stopPing()
-      try { ws?.close?.() } catch (_) {}
+      stopReconnect()
+      try {
+        ws?.close?.()
+      } catch (err) {
+        console.error('[RoomChannel] Failed to close WebSocket:', err)
+      }
       ws = null
     },
     send(message: unknown) {

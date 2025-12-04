@@ -15,7 +15,9 @@ export default function JoinTab({ headers, onJoined }: Props) {
       const r = await fetch(`${API_BASE}/api/rooms`);
       const data = await r.json();
       setRooms(data);
-    } catch {}
+    } catch (err) {
+      console.error('[JoinTab] Failed to load rooms:', err)
+    }
   }
 
   useEffect(() => {
@@ -29,7 +31,9 @@ export default function JoinTab({ headers, onJoined }: Props) {
         if (msg?.type === "rooms") {
           setRooms(msg.payload);
         }
-      } catch {}
+      } catch (err) {
+        console.error('[JoinTab] Failed to parse WebSocket message:', err)
+      }
     };
     ws.onclose = () => { /* можно переподключаться при желании */ };
 
