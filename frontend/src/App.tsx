@@ -118,6 +118,12 @@ export default function App(){
     return map
   }, [state?.cards])
 
+  useEffect(() => {
+    const webApp = window.Telegram?.WebApp
+    webApp?.ready?.()
+    webApp?.expand?.()
+  }, [])
+
   const handleRoomEvent = useCallback((evt: any) => {
     if (!evt) return
     const eventType = typeof evt.event === 'string' ? evt.event : typeof evt.type === 'string' ? evt.type : undefined
