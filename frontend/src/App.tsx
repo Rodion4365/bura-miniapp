@@ -20,10 +20,11 @@ import { applyThemeOnce, watchTelegramTheme } from './theme'
 import { initViewportSizing } from './viewport'
 import { createRoomChannel, type RoomChannel } from './room-channel'
 import GameRules from './components/GameRules'
+import Leaderboard from './components/Leaderboard'
 
 declare global { interface Window { Telegram: any } }
 
-type Screen = 'menu' | 'create' | 'join' | 'room' | 'rules' | 'match_result'
+type Screen = 'menu' | 'create' | 'join' | 'room' | 'rules' | 'players' | 'match_result'
 
 type CountdownSource = 'board' | 'phase' | 'event'
 
@@ -110,6 +111,7 @@ export default function App(){
   const [playStamp, setPlayStamp] = useState(0)
   const [countdownInfo, setCountdownInfo] = useState<CountdownInfo | null>(null)
   const [countdownNow, setCountdownNow] = useState(() => Date.now())
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected')
   const channelRef = useRef<RoomChannel | null>(null)
   const countdownSyncRef = useRef(false)
   const cardAssets = useMemo(() => {
@@ -237,6 +239,18 @@ export default function App(){
         const u = await verify(initData)
         setUser({ id: u.user_id, name: u.name, avatar: u.avatar_url })
         setHeaders({ 'x-user-id': u.user_id, 'x-user-name': encodeURIComponent(u.name), 'x-user-avatar': u.avatar_url || '' })
+
+        // Восстановление сессии после перезагрузки
+        try {
+          const savedRoomId = localStorage.getItem('bura_active_room')
+          const savedPlayerId = localStorage.getItem('bura_player_id')
+          if (savedRoomId && savedPlayerId === u.user_id) {
+            console.log('[Reconnect] Restoring session:', savedRoomId)
+            setRoomId(savedRoomId)
+          }
+        } catch (err) {
+          console.warn('[Reconnect] Failed to restore session:', err)
+        }
       } catch (err) {
         console.error('Auth failed, fallback to guest mode:', err)
         // ВАЖНО: initDataUnsafe может быть подделан на клиенте!
@@ -252,6 +266,18 @@ export default function App(){
           'x-user-avatar': '',
           'x-guest-mode': 'true'  // Явно помечаем гостевой режим
         })
+
+        // Восстановление сессии для гостя
+        try {
+          const savedRoomId = localStorage.getItem('bura_active_room')
+          const savedPlayerId = localStorage.getItem('bura_player_id')
+          if (savedRoomId && savedPlayerId === id) {
+            console.log('[Reconnect] Restoring guest session:', savedRoomId)
+            setRoomId(savedRoomId)
+          }
+        } catch (err) {
+          console.warn('[Reconnect] Failed to restore guest session:', err)
+        }
       } finally {
         tg?.ready?.()
       }
@@ -268,7 +294,23 @@ export default function App(){
     }
     if(!roomId || !user){
       setState(undefined)
+      setConnectionStatus('disconnected')
+      // Очищаем сессию при выходе из комнаты
+      try {
+        localStorage.removeItem('bura_active_room')
+        localStorage.removeItem('bura_player_id')
+      } catch (err) {
+        console.warn('[Reconnect] Failed to clear session:', err)
+      }
       return
+    }
+
+    // Сохраняем активную сессию
+    try {
+      localStorage.setItem('bura_active_room', roomId)
+      localStorage.setItem('bura_player_id', user.id)
+    } catch (err) {
+      console.warn('[Reconnect] Failed to save session:', err)
     }
 
     const base = import.meta.env.VITE_WS_BASE || (location.origin.replace(/^http/,'ws'))
@@ -279,11 +321,17 @@ export default function App(){
       onState: (next)=>{
         setState(next)
         setScreen(next?.match_over ? 'match_result' : 'room')
+        setConnectionStatus('connected')
       },
       onEvent: handleRoomEvent,
+      onStatusChange: (status) => {
+        setConnectionStatus(status)
+      },
       pollIntervalMs: 3000,
     })
     channelRef.current = channel
+    setConnectionStatus('connecting')
+
     return () => {
       channel.close()
       if (channelRef.current === channel) channelRef.current = null
@@ -313,6 +361,15 @@ export default function App(){
     setRoomId(undefined)
     setState(undefined)
     setScreen('menu')
+    setConnectionStatus('disconnected')
+
+    // Очищаем сохранённую сессию
+    try {
+      localStorage.removeItem('bura_active_room')
+      localStorage.removeItem('bura_player_id')
+    } catch (err) {
+      console.warn('[Reconnect] Failed to clear session on exit:', err)
+    }
   }, [])
 
   const earlyTurnOptions = useMemo<EarlyTurnOption[]>(() => {
@@ -456,6 +513,7 @@ export default function App(){
         <MainMenu
           onNewGame={()=> setScreen('create')}
           onJoin={()=> setScreen('join')}
+          onShowPlayers={()=> setScreen('players')}
           onShowRules={()=> setScreen('rules')}
         />
       )}
@@ -484,6 +542,14 @@ export default function App(){
         </div>
       )}
 
+      {screen === 'players' && (
+        <div className="page-wrap">
+          <h2 className="page-title">Рейтинг игроков</h2>
+          <Leaderboard />
+          <button className="link-btn" onClick={()=> setScreen('menu')}>← Назад</button>
+        </div>
+      )}
+
       {screen === 'match_result' && state && (
         <MatchSummary state={state} meId={user?.id} onExit={handleExitMatch} />
       )}
@@ -499,6 +565,11 @@ export default function App(){
               <span className="meta-chip">Игроков {state.players.length}/{state.config?.maxPlayers ?? state.variant?.players_max ?? state.players.length}</span>
               {state.config && (
                 <span className="meta-chip">Сброс: {state.config.discardVisibility === 'open' ? 'открытый' : 'закрытый'}</span>
+              )}
+              {connectionStatus !== 'connected' && (
+                <span className={`meta-chip connection-status connection-${connectionStatus}`}>
+                  {connectionStatus === 'connecting' ? '🔄 Переподключение...' : '⚠️ Нет связи'}
+                </span>
               )}
             </div>
           <Controls

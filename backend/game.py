@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import time
+import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence
@@ -189,6 +190,10 @@ class Room:
         self.current_round_start_idx: Optional[int] = None
         self.next_round_start_idx: Optional[int] = None
 
+        # Для сохранения в БД
+        self.match_id: Optional[str] = None
+        self.match_started_at: Optional[float] = None
+
     # ------------------------------------------------------------------
     # Lobby management
     # ------------------------------------------------------------------
@@ -242,6 +247,11 @@ class Room:
         self.game_wins = {p.id: 0 for p in self.players}
         self.current_round_start_idx = None
         self.next_round_start_idx = None
+
+        # Генерируем ID матча для БД
+        self.match_id = str(uuid.uuid4())
+        self.match_started_at = time.time()
+
         self._start_new_round(initial=True)
 
     def _start_new_round(self, *, initial: bool):
@@ -699,9 +709,43 @@ class Room:
             self.winner_id = self.winners[0] if len(self.winners) == 1 else None
             self.pending_round_start = False
             self.started = False
+
+            # Сохраняем результаты матча в БД
+            self._save_match_to_db()
             return
         self.winner_id = None
         self.pending_round_start = True
+
+    def _save_match_to_db(self):
+        """Сохранить результаты завершённого матча в БД (асинхронно в фоне)"""
+        if not self.match_id:
+            return
+
+        # Импортируем здесь, чтобы избежать циклических зависимостей
+        import asyncio
+        from database import save_match
+
+        participants = []
+        for player in self.players:
+            participants.append({
+                "player_id": player.id,
+                "player_name": player.name,
+                "final_score": self.scores.get(player.id, 0),
+                "is_winner": player.id in self.winners
+            })
+
+        # Запускаем сохранение асинхронно
+        try:
+            asyncio.create_task(save_match(
+                match_id=self.match_id,
+                room_id=self.id,
+                variant_key=self.variant.key,
+                winner_id=self.winner_id,
+                participants=participants,
+                total_rounds=self.round_number
+            ))
+        except Exception as e:
+            print(f"[Game] Failed to save match {self.match_id} to DB:", e)
 
     def _collect_player_totals(self) -> List[PlayerTotals]:
         totals: List[PlayerTotals] = []

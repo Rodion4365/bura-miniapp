@@ -8,6 +8,8 @@ import { getState } from './api'
 type GameState = Record<string, unknown>
 type Listener = (state: GameState) => void
 type EventListener = (event: Record<string, unknown>) => void
+type ConnectionStatus = 'connected' | 'connecting' | 'disconnected'
+type StatusListener = (status: ConnectionStatus) => void
 
 export type RoomChannel = {
   /** Завершить работу канала и закрыть WebSocket */
@@ -26,9 +28,10 @@ export function createRoomChannel(opts: {
   playerId: string,
   onState: Listener,
   onEvent?: EventListener,
+  onStatusChange?: StatusListener,
   pollIntervalMs?: number
 }): RoomChannel {
-  const { wsBase, roomId, playerId, onState, onEvent } = opts
+  const { wsBase, roomId, playerId, onState, onEvent, onStatusChange } = opts
   const pollInterval = opts.pollIntervalMs ?? 3000
 
   let ws: WebSocket | null = null
@@ -68,15 +71,22 @@ export function createRoomChannel(opts: {
 
   function connect() {
     if (closed) return
+    onStatusChange?.('connecting')
     try {
       ws = new WebSocket(url)
     } catch (err) {
       console.error('[RoomChannel] WebSocket connection failed:', err)
+      onStatusChange?.('disconnected')
       startPolling()
       scheduleReconnect()
       return
     }
-    ws.onopen = () => { reconnectAttempts = 0; stopPolling(); startPing() }
+    ws.onopen = () => {
+      reconnectAttempts = 0
+      stopPolling()
+      startPing()
+      onStatusChange?.('connected')
+    }
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data)
@@ -89,8 +99,17 @@ export function createRoomChannel(opts: {
         console.error('[RoomChannel] Failed to parse WebSocket message:', err)
       }
     }
-    ws.onclose = () => { stopPing(); startPolling(); scheduleReconnect() }
-    ws.onerror = () => { startPolling(); scheduleReconnect() }
+    ws.onclose = () => {
+      stopPing()
+      startPolling()
+      onStatusChange?.('connecting')
+      scheduleReconnect()
+    }
+    ws.onerror = () => {
+      startPolling()
+      onStatusChange?.('disconnected')
+      scheduleReconnect()
+    }
   }
   function scheduleReconnect() {
     if (closed) return

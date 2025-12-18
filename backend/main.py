@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from models import CreateGameRequest, JoinGameRequest, Player, GameVariant, TableConfig
 from game import ROOMS, Room, list_variants, VARIANTS, list_rooms_summary
 from auth import verify_init_data
+from database import init_database, get_leaderboard, get_player_stats, get_player_history
 
 # ---------- CORS with multiple origins ----------
 def _parse_origins(raw: str) -> list[str]:
@@ -42,6 +43,12 @@ app.add_middleware(
 )
 
 print("[CORS] allow_origins:", ALLOWED_ORIGINS)
+
+# Инициализация базы данных при старте
+@app.on_event("startup")
+async def startup_event():
+    await init_database()
+    print("[Main] Application started")
 
 # ---------- API models ----------
 class VerifyResult(BaseModel):
@@ -129,6 +136,30 @@ async def start_game(room_id: str):
 async def game_state(room_id: str, x_user_id: Optional[str] = Header(None)):
     r = _get_room_or_404(room_id)
     return r.to_state(x_user_id).model_dump(by_alias=True)
+
+
+# ---------- Players API ----------
+@app.get("/api/players/leaderboard")
+async def players_leaderboard(limit: int = 50):
+    """Получить топ игроков по рейтингу"""
+    leaderboard = await get_leaderboard(limit=min(limit, 100))
+    return {"players": leaderboard}
+
+
+@app.get("/api/players/{player_id}/stats")
+async def player_stats(player_id: str):
+    """Получить статистику конкретного игрока"""
+    stats = await get_player_stats(player_id)
+    if not stats:
+        raise HTTPException(status_code=404, detail="player_not_found")
+    return stats
+
+
+@app.get("/api/players/{player_id}/history")
+async def player_history(player_id: str, limit: int = 20):
+    """Получить историю матчей игрока"""
+    history = await get_player_history(player_id, limit=min(limit, 50))
+    return {"matches": history}
 
 # ---------- WebSockets hub ----------
 class Hub:
