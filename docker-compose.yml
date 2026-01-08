@@ -1,17 +1,72 @@
 version: '3.9'
+
 services:
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    container_name: bura-backend
+    restart: unless-stopped
     env_file:
       - backend/.env
-    ports: ["8000:8000"]
+    environment:
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8000
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.bura-backend.rule=Host(`${BACKEND_HOST}`)
+      - traefik.http.routers.bura-backend.entrypoints=web,websecure
+      - traefik.http.routers.bura-backend.tls=true
+      - traefik.http.routers.bura-backend.tls.certresolver=letsencrypt
+      - traefik.http.services.bura-backend.loadbalancer.server.port=8000
+    networks:
+      - web
+    depends_on:
+      - postgres
+
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_BASE=https://${BACKEND_HOST}
+        - VITE_WS_BASE=wss://${BACKEND_HOST}
+    container_name: bura-frontend
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.bura-frontend.rule=Host(`${FRONTEND_HOST}`)
+      - traefik.http.routers.bura-frontend.entrypoints=web,websecure
+      - traefik.http.routers.bura-frontend.tls=true
+      - traefik.http.routers.bura-frontend.tls.certresolver=letsencrypt
+      - traefik.http.services.bura-frontend.loadbalancer.server.port=80
+    networks:
+      - web
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bura-postgres
+    restart: unless-stopped
     environment:
-      - VITE_API_BASE=http://localhost:8000
-      - VITE_WS_BASE=ws://localhost:8000
-    ports: ["5173:80"]
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-bura}
+    volumes:
+      - bura_postgres_data:/var/lib/postgresql/data
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  web:
+    external: true
+
+volumes:
+  bura_postgres_data:
+    driver: local
