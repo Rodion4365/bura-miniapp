@@ -91,30 +91,32 @@ body { margin: 0; min-height: var(--app-vh-stable, 100vh); }
 
 /* ======= THEME (light/dark) ======= */
 :root{
-  --bg: #ffffff;
-  --fg: #111111;
-  --muted: #666;
+  --bg: #eef1ff;
+  --bg-alt: #f9faff;
+  --fg: #0f111a;
+  --muted: #5f6472;
   --card: #ffffff;
-  --border: #e7e7e7;
-  --primary: #111111;
-  --primary-fg: #ffffff;
+  --border: #dfe3ef;
+  --primary: #7c66dc;
+  --primary-fg: #0b0c14;
 
   /* если Telegram дал переменные — они перекроют дефолты */
   /* пример: var(--tg-bg_color), var(--tg-text_color) и т.п. */
 }
 html[data-theme="dark"]{
-  --bg: #0f1115;
-  --fg: #f3f3f3;
-  --muted: #9aa3ad;
-  --card: #12141a;
-  --border: #222733;
-  --primary: #f3f3f3;
-  --primary-fg: #0f1115;
+  --bg: #0f111a;
+  --bg-alt: #000000;
+  --fg: #f5f7ff;
+  --muted: #a6aec4;
+  --card: #111523;
+  --border: #1f2432;
+  --primary: #7c66dc;
+  --primary-fg: #ffffff;
   color-scheme: dark;
 }
 
 body, .app{
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 68%);
   color: var(--fg);
 }
 
@@ -128,10 +130,34 @@ body, .app{
 .menu-title{ font-size: var(--font-3xl); font-weight: 800; margin: 0 0 6px; }
 .menu-actions{ display:flex; gap: 12px; flex-wrap: wrap; justify-content:center; }
 .btn-xl{
-  padding: 14px 20px; border-radius: 14px; border:1px solid var(--border);
-  background: var(--card); color: var(--fg); font-weight: 800; font-size: var(--font-lg);
+  padding: 14px 20px;
+  border-radius: 18px;
+  border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--fg);
+  font-weight: 800;
+  font-size: var(--font-lg);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  transition: transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
 }
-.btn-xl.primary{ background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+.btn-xl.primary{
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, transparent), var(--primary));
+  color: var(--primary-fg);
+  border-color: color-mix(in srgb, var(--primary) 80%, transparent);
+  box-shadow: 0 12px 32px rgba(124, 102, 220, 0.35);
+}
+.btn-xl:not(.primary):hover,
+.btn-xl:not(.primary):focus-visible{
+  background: color-mix(in srgb, var(--card) 75%, var(--primary) 8%);
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  box-shadow: 0 12px 30px rgba(0,0,0,0.16);
+}
+.btn-xl.primary:hover,
+.btn-xl.primary:focus-visible{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px rgba(124, 102, 220, 0.42);
+}
+.btn-xl:active{ transform: translateY(0); }
 .btn-xl.ghost{ background: transparent; border-style: dashed; }
 .menu-note{ font-size: var(--font-2xs); opacity: .7; }
 
@@ -173,9 +199,29 @@ body, .app{
 /* ======= COMMON UI ======= */
 .input{ flex:1 1 auto; padding:10px 12px; border:1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--fg); }
 .button{
-  padding:10px 12px; border-radius: 10px; border:1px solid var(--border); background: var(--card); color: var(--fg); font-weight: 700;
+  padding:10px 12px;
+  border-radius: 14px;
+  border:1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--fg);
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  transition: transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
 }
-.button.primary{ background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+.button.primary{
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, transparent), var(--primary));
+  color: var(--primary-fg);
+  border-color: color-mix(in srgb, var(--primary) 80%, transparent);
+  box-shadow: 0 12px 32px rgba(124, 102, 220, 0.35);
+}
+.button:hover,
+.button:focus-visible{
+  background: color-mix(in srgb, var(--card) 78%, var(--primary) 10%);
+  border-color: color-mix(in srgb, var(--primary) 18%, var(--border));
+  box-shadow: 0 12px 28px rgba(0,0,0,0.16);
+  transform: translateY(-1px);
+}
+.button:active{ transform: translateY(0); }
 .start-button{
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
