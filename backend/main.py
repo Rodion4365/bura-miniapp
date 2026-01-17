@@ -177,12 +177,31 @@ class Hub:
     async def connect_room(self, room_id: str, player_id: str, ws: WebSocket):
         await ws.accept()
 
-        # Проверяем, был ли игрок отключен
+        # Проверяем, был ли игрок отключен (по текущему ID)
         disconnect_key = (room_id, player_id)
         if disconnect_key in self.disconnected_players:
             # Игрок переподключается - восстанавливаем его
             del self.disconnected_players[disconnect_key]
-            print(f"[Reconnect] Player {player_id} reconnected to room {room_id}")
+            print(f"[Reconnect] Player {player_id} reconnected to room {room_id} (same ID)")
+
+        # Также проверяем переподключение по старому ID (если игрок переподключается с новым ID)
+        # Это происходит когда игрок переподключается после перезагрузки страницы
+        # В этом случае add_player уже обновил ID игрока, но в disconnected_players остался старый ID
+        if room_id in ROOMS:
+            room = ROOMS[room_id]
+            # Ищем других отключенных игроков в этой комнате
+            # Если игрок переподключился с новым ID, старый ключ нужно удалить
+            keys_to_remove = []
+            for (r_id, old_player_id), disconnect_time in self.disconnected_players.items():
+                if r_id == room_id and old_player_id != player_id:
+                    # Проверяем, есть ли игрок с таким ID в комнате
+                    if not any(p.id == old_player_id for p in room.players):
+                        # Старый ID больше не используется - удаляем из disconnected_players
+                        keys_to_remove.append((r_id, old_player_id))
+                        print(f"[Reconnect] Removing stale disconnect entry for {old_player_id} in room {r_id}")
+
+            for key in keys_to_remove:
+                del self.disconnected_players[key]
 
         self.rooms.setdefault(room_id, []).append(ws)
         self.ws_player[ws] = player_id

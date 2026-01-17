@@ -113,6 +113,8 @@ export default function App(){
   const [countdownInfo, setCountdownInfo] = useState<CountdownInfo | null>(null)
   const [countdownNow, setCountdownNow] = useState(() => Date.now())
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected')
+  const [cardsLoading, setCardsLoading] = useState(true)
+  const [cardsLoadProgress, setCardsLoadProgress] = useState({ loaded: 0, total: 37 })
   const channelRef = useRef<RoomChannel | null>(null)
   const countdownSyncRef = useRef(false)
   const cardAssets = useMemo(() => {
@@ -123,9 +125,19 @@ export default function App(){
 
   // Глобальная предзагрузка всех карт при запуске приложения
   useEffect(() => {
-    preloadAllCards().catch(err => {
-      console.error('[App] Failed to preload cards:', err)
+    console.log('[App] Starting card preload...')
+    preloadAllCards((loaded, total) => {
+      setCardsLoadProgress({ loaded, total })
     })
+      .then(() => {
+        console.log('[App] ✓ Card preload complete')
+        setCardsLoading(false)
+      })
+      .catch(err => {
+        console.error('[App] ✗ Failed to preload cards:', err)
+        alert('Не удалось загрузить изображения карт. Пожалуйста, проверьте интернет-соединение и перезагрузите страницу.')
+        setCardsLoading(false) // Разблокируем интерфейс, но карты могут не работать
+      })
   }, [])
 
   useEffect(() => {
@@ -517,6 +529,24 @@ export default function App(){
   // рендер
   return (
     <div className="app">
+      {cardsLoading && (
+        <div className="loading-overlay">
+          <div className="loading-content">
+            <h2>Загрузка игры...</h2>
+            <p>Загружаем изображения карт</p>
+            <div className="loading-progress">
+              <div
+                className="loading-progress-bar"
+                style={{ width: `${(cardsLoadProgress.loaded / cardsLoadProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="loading-stats">
+              {cardsLoadProgress.loaded} / {cardsLoadProgress.total} карт загружено
+            </p>
+          </div>
+        </div>
+      )}
+
       {screen === 'menu' && (
         <MainMenu
           onNewGame={()=> setScreen('create')}

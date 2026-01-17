@@ -201,8 +201,38 @@ class Room:
     # ------------------------------------------------------------------
     def add_player(self, p: Player):
         # Проверяем, есть ли игрок уже в комнате (для переподключения)
-        if any(x.id == p.id for x in self.players):
-            return  # Игрок уже в комнате - это переподключение
+        # Проверяем как по ID, так и по имени (nickname)
+        existing_by_id = next((x for x in self.players if x.id == p.id), None)
+        existing_by_name = next((x for x in self.players if x.name == p.name), None)
+
+        if existing_by_id:
+            # Игрок уже в комнате с тем же ID - это переподключение
+            print(f"[Room {self.id}] Player {p.name} ({p.id}) reconnecting (same ID)")
+            return
+
+        if existing_by_name:
+            # Игрок с таким же именем уже в комнате, но с другим ID
+            # Это переподключение после потери соединения/перезагрузки страницы
+            print(f"[Room {self.id}] Player {p.name} reconnecting with new ID: {existing_by_name.id} -> {p.id}")
+
+            # Обновляем данные игрока (новый ID, возможно новый аватар)
+            old_id = existing_by_name.id
+            existing_by_name.id = p.id
+            existing_by_name.avatar_url = p.avatar_url or existing_by_name.avatar_url
+
+            # Переносим данные игры на новый ID
+            if old_id in self.hands:
+                self.hands[p.id] = self.hands.pop(old_id)
+            if old_id in self.taken_cards:
+                self.taken_cards[p.id] = self.taken_cards.pop(old_id)
+            if old_id in self.scores:
+                self.scores[p.id] = self.scores.pop(old_id)
+            if old_id in self.declared_combos:
+                self.declared_combos[p.id] = self.declared_combos.pop(old_id)
+            if old_id in self.game_wins:
+                self.game_wins[p.id] = self.game_wins.pop(old_id)
+
+            return
 
         # Если игра уже началась и это новый игрок - запрещаем
         if self.started:
@@ -211,6 +241,7 @@ class Room:
         max_players = self.config.max_players or self.variant.players_max
         if len(self.players) >= max_players:
             raise ValueError("Room full")
+
         p.seat = len(self.players)
         self.players.append(p)
         self.hands.setdefault(p.id, [])
