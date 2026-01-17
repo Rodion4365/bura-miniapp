@@ -20,7 +20,8 @@ type Props = {
   onRequestEarlyTurn?: (cards: Card[]) => void
 }
 
-const RANK_ORDER = [6, 7, 8, 9, 10, 11, 12, 13, 14]
+// Order from weakest to strongest - 10 is second strongest after Ace
+const RANK_ORDER = [6, 7, 8, 9, 11, 12, 13, 10, 14]
 const FOUR_CARD_RULE_HINT =
   'Допустимая четвёрка: 4 карты одной масти или комбинации тузов и десяток (туз + 3×10, 2 туза + 2×10, 3 туза + десятка, четыре туза)'
 const EARLY_SUIT_ORDER: Suit[] = ['♠', '♥', '♦', '♣']

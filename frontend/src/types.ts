@@ -66,6 +66,7 @@ export type Player = {
   name: string
   avatar_url?: string
   seat?: number
+  disconnected?: boolean
 }
 
 export type BoardCard = {

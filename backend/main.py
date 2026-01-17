@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import json
 import uuid
-from typing import Dict, List, Optional
+import time
+import asyncio
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import (
     FastAPI,
@@ -43,12 +45,6 @@ app.add_middleware(
 )
 
 print("[CORS] allow_origins:", ALLOWED_ORIGINS)
-
-# Инициализация базы данных при старте
-@app.on_event("startup")
-async def startup_event():
-    await init_database()
-    print("[Main] Application started")
 
 # ---------- API models ----------
 class VerifyResult(BaseModel):
@@ -135,7 +131,12 @@ async def start_game(room_id: str):
 @app.get("/api/game/state/{room_id}")
 async def game_state(room_id: str, x_user_id: Optional[str] = Header(None)):
     r = _get_room_or_404(room_id)
-    return r.to_state(x_user_id).model_dump(by_alias=True)
+    state = r.to_state(x_user_id)
+    # Помечаем отключенных игроков
+    for player in state.players:
+        if hub.is_player_disconnected(room_id, player.id):
+            player.disconnected = True
+    return state.model_dump(by_alias=True)
 
 
 # ---------- Players API ----------
@@ -168,9 +169,21 @@ class Hub:
         self.lobby: List[WebSocket] = []
         self.ws_player: Dict[WebSocket, str] = {}
         self.ws_room: Dict[WebSocket, str] = {}
+        # Отслеживание отключенных игроков: (room_id, player_id) -> timestamp отключения
+        self.disconnected_players: Dict[Tuple[str, str], float] = {}
+        # Константа таймаута переподключения (30 секунд)
+        self.reconnect_timeout_sec = 30.0
 
     async def connect_room(self, room_id: str, player_id: str, ws: WebSocket):
         await ws.accept()
+
+        # Проверяем, был ли игрок отключен
+        disconnect_key = (room_id, player_id)
+        if disconnect_key in self.disconnected_players:
+            # Игрок переподключается - восстанавливаем его
+            del self.disconnected_players[disconnect_key]
+            print(f"[Reconnect] Player {player_id} reconnected to room {room_id}")
+
         self.rooms.setdefault(room_id, []).append(ws)
         self.ws_player[ws] = player_id
         self.ws_room[ws] = room_id
@@ -180,13 +193,52 @@ class Hub:
         rid = self.ws_room.pop(ws, None)
         if rid and ws in self.rooms.get(rid, []):
             self.rooms[rid].remove(ws)
+
         if rid and pid and rid in ROOMS:
-            ROOMS[rid].remove_player(pid)
-            if len(ROOMS[rid].players) == 0:
-                # авто-удаление пустой комнаты
-                ROOMS.pop(rid, None)
-            await broadcast_room_safe(rid)
-            await broadcast_lobby()
+            room = ROOMS[rid]
+            # Проверяем, началась ли игра
+            if room.started:
+                # Если игра началась, даем 30 секунд на переподключение
+                disconnect_key = (rid, pid)
+                self.disconnected_players[disconnect_key] = time.time()
+                print(f"[Reconnect] Player {pid} disconnected from room {rid}, waiting {self.reconnect_timeout_sec}s for reconnection")
+                await broadcast_room_safe(rid)
+            else:
+                # Если игра не началась, удаляем игрока сразу
+                room.remove_player(pid)
+                if len(room.players) == 0:
+                    # авто-удаление пустой комнаты
+                    ROOMS.pop(rid, None)
+                await broadcast_room_safe(rid)
+                await broadcast_lobby()
+
+    async def cleanup_disconnected_players(self):
+        """Фоновая задача для удаления игроков, которые не переподключились за 30 секунд"""
+        while True:
+            try:
+                await asyncio.sleep(5)  # Проверяем каждые 5 секунд
+                current_time = time.time()
+                to_remove = []
+
+                for (room_id, player_id), disconnect_time in self.disconnected_players.items():
+                    if current_time - disconnect_time > self.reconnect_timeout_sec:
+                        to_remove.append((room_id, player_id))
+
+                for room_id, player_id in to_remove:
+                    del self.disconnected_players[(room_id, player_id)]
+                    if room_id in ROOMS:
+                        print(f"[Reconnect] Player {player_id} timeout, removing from room {room_id}")
+                        ROOMS[room_id].remove_player(player_id)
+                        if len(ROOMS[room_id].players) == 0:
+                            ROOMS.pop(room_id, None)
+                        await broadcast_room_safe(room_id)
+                        await broadcast_lobby()
+            except Exception as e:
+                print(f"[Reconnect] Error in cleanup task: {e}")
+
+    def is_player_disconnected(self, room_id: str, player_id: str) -> bool:
+        """Проверяет, отключен ли игрок"""
+        return (room_id, player_id) in self.disconnected_players
 
     async def connect_lobby(self, ws: WebSocket):
         await ws.accept()
@@ -199,7 +251,12 @@ class Hub:
         for ws in list(self.rooms.get(room_id, [])):
             player_id = self.ws_player.get(ws)
             try:
-                payload = room.to_state(player_id).model_dump(by_alias=True)
+                state = room.to_state(player_id)
+                # Помечаем отключенных игроков
+                for player in state.players:
+                    if self.is_player_disconnected(room_id, player.id):
+                        player.disconnected = True
+                payload = state.model_dump(by_alias=True)
                 await ws.send_json({"type": "state", "payload": payload})
             except RuntimeError:
                 pass
@@ -218,7 +275,16 @@ class Hub:
             except RuntimeError:
                 pass
 
+# Создаем hub
 hub = Hub()
+
+# Инициализация базы данных при старте
+@app.on_event("startup")
+async def startup_event():
+    await init_database()
+    # Запускаем фоновую задачу для очистки отключенных игроков
+    asyncio.create_task(hub.cleanup_disconnected_players())
+    print("[Main] Application started")
 
 # ---------- broadcasters ----------
 async def broadcast_room(room_id: str):
