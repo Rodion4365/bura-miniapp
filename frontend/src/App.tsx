@@ -114,7 +114,7 @@ export default function App(){
   const [countdownNow, setCountdownNow] = useState(() => Date.now())
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected')
   const [cardsLoading, setCardsLoading] = useState(true)
-  const [cardsLoadProgress, setCardsLoadProgress] = useState({ loaded: 0, total: 37 })
+  const [cardsLoadProgress, setCardsLoadProgress] = useState({ loaded: 0, total: 0 })
   const channelRef = useRef<RoomChannel | null>(null)
   const countdownSyncRef = useRef(false)
   const cardAssets = useMemo(() => {
@@ -549,11 +549,13 @@ export default function App(){
             <div className="loading-progress">
               <div
                 className="loading-progress-bar"
-                style={{ width: `${(cardsLoadProgress.loaded / cardsLoadProgress.total) * 100}%` }}
+                style={{ width: `${cardsLoadProgress.total > 0 ? (cardsLoadProgress.loaded / cardsLoadProgress.total) * 100 : 0}%` }}
               />
             </div>
             <p className="loading-stats">
-              {cardsLoadProgress.loaded} / {cardsLoadProgress.total} карт загружено
+              {cardsLoadProgress.total > 0
+                ? `${cardsLoadProgress.loaded} / ${cardsLoadProgress.total} карт загружено`
+                : 'Инициализация...'}
             </p>
           </div>
         </div>
