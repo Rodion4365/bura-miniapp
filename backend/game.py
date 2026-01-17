@@ -155,7 +155,9 @@ class Room:
         self.started = False
 
         self.deck: List[Card] = []
-        self.card_catalog: Dict[str, Card] = {}
+        # Инициализируем каталог карт сразу для предзагрузки на клиенте
+        full_deck = _make_deck()
+        self.card_catalog: Dict[str, Card] = {card.id: card for card in full_deck}
         self.trump: Optional[str] = None
         self.trump_card: Optional[Card] = None
         self.hands: Dict[str, List[Card]] = {}
@@ -198,10 +200,14 @@ class Room:
     # Lobby management
     # ------------------------------------------------------------------
     def add_player(self, p: Player):
+        # Проверяем, есть ли игрок уже в комнате (для переподключения)
+        if any(x.id == p.id for x in self.players):
+            return  # Игрок уже в комнате - это переподключение
+
+        # Если игра уже началась и это новый игрок - запрещаем
         if self.started:
             raise ValueError("Game already started")
-        if any(x.id == p.id for x in self.players):
-            return
+
         max_players = self.config.max_players or self.variant.players_max
         if len(self.players) >= max_players:
             raise ValueError("Room full")

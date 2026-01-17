@@ -21,6 +21,7 @@ import { initViewportSizing } from './viewport'
 import { createRoomChannel, type RoomChannel } from './room-channel'
 import GameRules from './components/GameRules'
 import Leaderboard from './components/Leaderboard'
+import { preloadAllCards } from './utils/cardAssets'
 
 declare global { interface Window { Telegram: any } }
 
@@ -120,39 +121,12 @@ export default function App(){
     return map
   }, [state?.cards])
 
-  // Предзагрузка изображений карт при старте игры
+  // Глобальная предзагрузка всех карт при запуске приложения
   useEffect(() => {
-    if (!state?.cards || state.cards.length === 0) return
-
-    const imagesToPreload = new Set<string>()
-
-    // Добавляем все изображения карт (лицевые и рубашку)
-    state.cards.forEach(card => {
-      if (card.imageUrl) imagesToPreload.add(card.imageUrl)
-      if (card.backImageUrl) imagesToPreload.add(card.backImageUrl)
+    preloadAllCards().catch(err => {
+      console.error('[App] Failed to preload cards:', err)
     })
-
-    // Предзагружаем все изображения
-    let loadedCount = 0
-    const totalCount = imagesToPreload.size
-
-    console.log(`[Preload] Starting preload of ${totalCount} card images`)
-
-    imagesToPreload.forEach(url => {
-      const img = new Image()
-      img.onload = () => {
-        loadedCount++
-        if (loadedCount === totalCount) {
-          console.log(`[Preload] All ${totalCount} card images preloaded successfully`)
-        }
-      }
-      img.onerror = () => {
-        console.warn(`[Preload] Failed to load image: ${url}`)
-        loadedCount++
-      }
-      img.src = url
-    })
-  }, [state?.cards])
+  }, [])
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp
