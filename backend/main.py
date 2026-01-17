@@ -46,19 +46,6 @@ app.add_middleware(
 
 print("[CORS] allow_origins:", ALLOWED_ORIGINS)
 
-# Создаем hub до startup_event
-hub = None  # Будет инициализирован в startup_event
-
-# Инициализация базы данных при старте
-@app.on_event("startup")
-async def startup_event():
-    global hub
-    hub = Hub()
-    await init_database()
-    # Запускаем фоновую задачу для очистки отключенных игроков
-    asyncio.create_task(hub.cleanup_disconnected_players())
-    print("[Main] Application started")
-
 # ---------- API models ----------
 class VerifyResult(BaseModel):
     ok: bool
@@ -146,10 +133,9 @@ async def game_state(room_id: str, x_user_id: Optional[str] = Header(None)):
     r = _get_room_or_404(room_id)
     state = r.to_state(x_user_id)
     # Помечаем отключенных игроков
-    if hub:
-        for player in state.players:
-            if hub.is_player_disconnected(room_id, player.id):
-                player.disconnected = True
+    for player in state.players:
+        if hub.is_player_disconnected(room_id, player.id):
+            player.disconnected = True
     return state.model_dump(by_alias=True)
 
 
@@ -288,6 +274,17 @@ class Hub:
                 await ws.send_json(message)
             except RuntimeError:
                 pass
+
+# Создаем hub
+hub = Hub()
+
+# Инициализация базы данных при старте
+@app.on_event("startup")
+async def startup_event():
+    await init_database()
+    # Запускаем фоновую задачу для очистки отключенных игроков
+    asyncio.create_task(hub.cleanup_disconnected_players())
+    print("[Main] Application started")
 
 # ---------- broadcasters ----------
 async def broadcast_room(room_id: str):
