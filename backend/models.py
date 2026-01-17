@@ -161,6 +161,7 @@ class Player(BaseModel):
     name: str
     avatar_url: Optional[str] = None
     seat: Optional[int] = None
+    disconnected: Optional[bool] = None  # Отмечает игрока как отключенного (ожидание переподключения)
 
 
 class GameVariant(BaseModel):

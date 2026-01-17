@@ -120,6 +120,40 @@ export default function App(){
     return map
   }, [state?.cards])
 
+  // Предзагрузка изображений карт при старте игры
+  useEffect(() => {
+    if (!state?.cards || state.cards.length === 0) return
+
+    const imagesToPreload = new Set<string>()
+
+    // Добавляем все изображения карт (лицевые и рубашку)
+    state.cards.forEach(card => {
+      if (card.imageUrl) imagesToPreload.add(card.imageUrl)
+      if (card.backImageUrl) imagesToPreload.add(card.backImageUrl)
+    })
+
+    // Предзагружаем все изображения
+    let loadedCount = 0
+    const totalCount = imagesToPreload.size
+
+    console.log(`[Preload] Starting preload of ${totalCount} card images`)
+
+    imagesToPreload.forEach(url => {
+      const img = new Image()
+      img.onload = () => {
+        loadedCount++
+        if (loadedCount === totalCount) {
+          console.log(`[Preload] All ${totalCount} card images preloaded successfully`)
+        }
+      }
+      img.onerror = () => {
+        console.warn(`[Preload] Failed to load image: ${url}`)
+        loadedCount++
+      }
+      img.src = url
+    })
+  }, [state?.cards])
+
   useEffect(() => {
     const webApp = window.Telegram?.WebApp
     webApp?.ready?.()
