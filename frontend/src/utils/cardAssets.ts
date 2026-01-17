@@ -18,25 +18,36 @@ export const ALL_CARD_IMAGES: string[] = [
 /**
  * Предзагружает все изображения карт
  * Возвращает Promise, который резолвится когда все карты загружены
+ * @param onProgress - callback для отслеживания прогресса (loaded, total)
  */
-export function preloadAllCards(): Promise<void> {
+export function preloadAllCards(onProgress?: (loaded: number, total: number) => void): Promise<void> {
   console.log(`[CardAssets] Starting preload of ${ALL_CARD_IMAGES.length} card images`)
 
-  const promises = ALL_CARD_IMAGES.map(url => {
-    return new Promise<void>((resolve) => {
+  let loadedCount = 0
+  const total = ALL_CARD_IMAGES.length
+
+  const promises = ALL_CARD_IMAGES.map((url, index) => {
+    return new Promise<void>((resolve, reject) => {
       const img = new Image()
+
       img.onload = () => {
+        loadedCount++
+        console.log(`[CardAssets] Loaded ${loadedCount}/${total}: ${url}`)
+        onProgress?.(loadedCount, total)
         resolve()
       }
+
       img.onerror = () => {
-        console.warn(`[CardAssets] Failed to load: ${url}`)
-        resolve() // Продолжаем даже если одна карта не загрузилась
+        console.error(`[CardAssets] FAILED to load image ${index + 1}/${total}: ${url}`)
+        // Не продолжаем если карта не загрузилась - это критическая ошибка
+        reject(new Error(`Failed to load card image: ${url}`))
       }
+
       img.src = url
     })
   })
 
   return Promise.all(promises).then(() => {
-    console.log(`[CardAssets] All ${ALL_CARD_IMAGES.length} card images preloaded successfully`)
+    console.log(`[CardAssets] ✓ All ${ALL_CARD_IMAGES.length} card images preloaded successfully`)
   })
 }
