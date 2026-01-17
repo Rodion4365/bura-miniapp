@@ -19,7 +19,7 @@ export const ALL_CARD_IMAGES: string[] = [
 /**
  * Предзагружает одно изображение с таймаутом
  */
-function preloadImage(url: string, timeoutMs: number = 2000): Promise<{ url: string; success: boolean }> {
+function preloadImage(url: string, timeoutMs: number = 10000): Promise<{ url: string; success: boolean }> {
   return new Promise((resolve) => {
     const img = new Image()
     let settled = false
@@ -57,7 +57,6 @@ function preloadImage(url: string, timeoutMs: number = 2000): Promise<{ url: str
 /**
  * Предзагружает все изображения карт
  * Возвращает Promise, который резолвится когда все карты загружены (или таймаут)
- * НЕ блокирует приложение при ошибке - карты будут подгружаться по необходимости
  * @param onProgress - callback для отслеживания прогресса (loaded, total)
  */
 export function preloadAllCards(onProgress?: (loaded: number, total: number) => void): Promise<void> {
@@ -66,14 +65,14 @@ export function preloadAllCards(onProgress?: (loaded: number, total: number) => 
 
   let loadedCount = 0
 
-  // Загружаем все карты параллельно с коротким таймаутом 2 секунды (локальные файлы)
+  // Загружаем все карты параллельно с таймаутом 5 секунд на каждую
   const promises = ALL_CARD_IMAGES.map((url) =>
-    preloadImage(url, 2000).then(result => {
+    preloadImage(url, 5000).then(result => {
       loadedCount++
       if (result.success) {
-        console.log(`[CardAssets] ✓ ${loadedCount}/${total}`)
+        console.log(`[CardAssets] ✓ Loaded ${loadedCount}/${total}`)
       } else {
-        console.warn(`[CardAssets] ✗ ${loadedCount}/${total}`)
+        console.warn(`[CardAssets] ✗ Failed ${loadedCount}/${total}: ${result.url}`)
       }
       onProgress?.(loadedCount, total)
       return result
@@ -81,15 +80,18 @@ export function preloadAllCards(onProgress?: (loaded: number, total: number) => 
   )
 
   return Promise.all(promises).then((results) => {
-    const succeeded = results.filter(r => r.success)
     const failed = results.filter(r => !r.success)
+    const succeeded = results.filter(r => r.success)
 
-    console.log(`[CardAssets] Preload complete: ${succeeded.length}/${total} loaded successfully`)
+    console.log(`[CardAssets] Preload complete: ${succeeded.length}/${total} succeeded`)
 
     if (failed.length > 0) {
-      console.warn(`[CardAssets] ${failed.length} images failed to preload - they will load on demand`)
-      // НЕ выбрасываем ошибку - позволяем приложению работать
-      // Карты будут подгружаться по мере необходимости и кэшироваться браузером
+      console.warn(`[CardAssets] Failed to load ${failed.length} images:`, failed.map(f => f.url))
+
+      // Если не загрузилось больше 5 карт - это проблема
+      if (failed.length > 5) {
+        throw new Error(`Failed to load ${failed.length} card images. Check your internet connection.`)
+      }
     }
   })
 }
