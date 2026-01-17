@@ -126,18 +126,30 @@ export default function App(){
   // Глобальная предзагрузка всех карт при запуске приложения
   useEffect(() => {
     console.log('[App] Starting card preload...')
+
+    // Максимум 5 секунд на предзагрузку, затем продолжаем работу
+    const maxWaitTimeout = setTimeout(() => {
+      console.warn('[App] Card preload timeout - continuing anyway')
+      setCardsLoading(false)
+    }, 5000)
+
     preloadAllCards((loaded, total) => {
       setCardsLoadProgress({ loaded, total })
     })
       .then(() => {
+        clearTimeout(maxWaitTimeout)
         console.log('[App] ✓ Card preload complete')
         setCardsLoading(false)
       })
       .catch(err => {
+        clearTimeout(maxWaitTimeout)
         console.error('[App] ✗ Failed to preload cards:', err)
-        alert('Не удалось загрузить изображения карт. Пожалуйста, проверьте интернет-соединение и перезагрузите страницу.')
-        setCardsLoading(false) // Разблокируем интерфейс, но карты могут не работать
+        // НЕ показываем alert - просто продолжаем работу
+        // Карты будут подгружаться по мере необходимости
+        setCardsLoading(false)
       })
+
+    return () => clearTimeout(maxWaitTimeout)
   }, [])
 
   useEffect(() => {
