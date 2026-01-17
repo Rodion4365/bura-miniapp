@@ -127,11 +127,11 @@ export default function App(){
   useEffect(() => {
     console.log('[App] Starting card preload...')
 
-    // Максимум 5 секунд на предзагрузку, затем продолжаем работу
+    // Максимум 3 секунды на предзагрузку локальных карт
     const maxWaitTimeout = setTimeout(() => {
       console.warn('[App] Card preload timeout - continuing anyway')
       setCardsLoading(false)
-    }, 5000)
+    }, 3000)
 
     preloadAllCards((loaded, total) => {
       setCardsLoadProgress({ loaded, total })

@@ -4,7 +4,8 @@
 const SUITS = ['S', 'H', 'D', 'C'] // Spades, Hearts, Diamonds, Clubs
 const RANKS = ['6', '7', '8', '9', '0', 'J', 'Q', 'K', 'A'] // 0 = 10
 
-const BASE_URL = 'https://deckofcardsapi.com/static/img'
+// Используем локальные изображения из public/cards
+const BASE_URL = '/cards'
 const BACK_IMAGE = `${BASE_URL}/back.png`
 
 // Генерируем список всех 36 карт + рубашка
@@ -18,7 +19,7 @@ export const ALL_CARD_IMAGES: string[] = [
 /**
  * Предзагружает одно изображение с таймаутом
  */
-function preloadImage(url: string, timeoutMs: number = 3000): Promise<{ url: string; success: boolean }> {
+function preloadImage(url: string, timeoutMs: number = 2000): Promise<{ url: string; success: boolean }> {
   return new Promise((resolve) => {
     const img = new Image()
     let settled = false
@@ -65,9 +66,9 @@ export function preloadAllCards(onProgress?: (loaded: number, total: number) => 
 
   let loadedCount = 0
 
-  // Загружаем все карты параллельно с коротким таймаутом 3 секунды
+  // Загружаем все карты параллельно с коротким таймаутом 2 секунды (локальные файлы)
   const promises = ALL_CARD_IMAGES.map((url) =>
-    preloadImage(url, 3000).then(result => {
+    preloadImage(url, 2000).then(result => {
       loadedCount++
       if (result.success) {
         console.log(`[CardAssets] ✓ ${loadedCount}/${total}`)

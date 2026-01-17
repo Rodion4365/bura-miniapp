@@ -10,7 +10,7 @@ type Props = {
   muted?: boolean
 }
 
-const DEFAULT_BACK = 'https://deckofcardsapi.com/static/img/back.png'
+const DEFAULT_BACK = '/cards/back.png'
 const RANK_LABEL: Record<number, string> = { 11: 'В', 12: 'Д', 13: 'К', 14: 'Т' }
 
 export default function CardView({ cardId, faceUp = true, asset, imageUrl, backImageUrl, muted }: Props) {
