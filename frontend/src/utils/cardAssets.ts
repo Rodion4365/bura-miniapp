@@ -4,7 +4,8 @@
 const SUITS = ['S', 'H', 'D', 'C'] // Spades, Hearts, Diamonds, Clubs
 const RANKS = ['6', '7', '8', '9', '0', 'J', 'Q', 'K', 'A'] // 0 = 10
 
-const BASE_URL = 'https://deckofcardsapi.com/static/img'
+// Используем локальные изображения из public/cards
+const BASE_URL = '/cards'
 const BACK_IMAGE = `${BASE_URL}/back.png`
 
 // Генерируем список всех 36 карт + рубашка
