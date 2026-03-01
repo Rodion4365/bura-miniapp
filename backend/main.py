@@ -313,6 +313,10 @@ async def broadcast_room_safe(room_id: Optional[str]):
     if room_id and room_id in ROOMS:
         await broadcast_room(room_id)
 
+async def _schedule_reveal_broadcast(room_id: str, delay: float) -> None:
+    await asyncio.sleep(delay)
+    await broadcast_room_safe(room_id)
+
 async def broadcast_lobby():
     await hub.send_lobby({"type": "rooms", "payload": list_rooms_summary()})
 
@@ -350,6 +354,10 @@ async def ws_room(ws: WebSocket, room_id: str, player_id: str = Query(...)):
                     await ws.send_json({"type": "error", "error": str(exc)})
                 else:
                     await broadcast_room(room_id)
+                    if room.reveal_until_ts is not None:
+                        delay = room.reveal_until_ts - time.time() + 0.1
+                        if delay > 0:
+                            asyncio.create_task(_schedule_reveal_broadcast(room_id, delay))
             elif t == "declare":
                 try:
                     room.declare_combination(data["player_id"], data["combo"])
