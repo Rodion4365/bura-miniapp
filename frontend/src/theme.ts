@@ -49,27 +49,31 @@ function applyContrast(themeParams: Record<string, unknown>, scheme: 'light' | '
   const bgCandidate =
     normalizeHex(themeParams['bg_color'] as string) || normalizeHex(themeParams['secondary_bg_color'] as string)
   const fgCandidate = normalizeHex(themeParams['text_color'] as string)
+  const accentCandidate = normalizeHex(themeParams['button_color'] as string)
 
-  const bg = bgCandidate || (scheme === 'dark' ? '#0f1115' : '#ffffff')
+  const bg = bgCandidate || (scheme === 'dark' ? '#0f111a' : '#eef1ff')
+  const bgAlt = normalizeHex(themeParams['secondary_bg_color'] as string) || (scheme === 'dark' ? '#000000' : '#f9faff')
   const fg =
     fgCandidate ||
-    (() => {
-      const lum = relativeLuminance(bg)
-      return lum > 0.5 ? '#111111' : '#f3f3f3'
-    })()
+    (scheme === 'dark'
+      ? '#f5f7ff'
+      : '#0f111a')
+
+  const primary = accentCandidate || '#7c66dc'
 
   root.setProperty('--bg', bg)
+  root.setProperty('--bg-alt', bgAlt)
   root.setProperty('--fg', fg)
 
-  const cardMix = scheme === 'dark' ? 0.14 : 0.08
+  const cardMix = scheme === 'dark' ? 0.14 : 0.1
   const borderMix = scheme === 'dark' ? 0.28 : 0.18
-  const mutedMix = scheme === 'dark' ? 0.45 : 0.65
+  const mutedMix = scheme === 'dark' ? 0.45 : 0.6
 
   root.setProperty('--card', mixHex(bg, fg, cardMix))
   root.setProperty('--border', mixHex(bg, fg, borderMix))
   root.setProperty('--muted', mixHex(fg, bg, mutedMix))
-  root.setProperty('--primary', fg)
-  root.setProperty('--primary-fg', bg)
+  root.setProperty('--primary', primary)
+  root.setProperty('--primary-fg', scheme === 'dark' ? '#ffffff' : '#0b0c14')
 }
 
 /**
